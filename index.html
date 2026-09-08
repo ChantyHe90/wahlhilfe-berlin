@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wahlkreis-Sitzsimulator (PoC)</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="header-row">
+    <h1>Wahlkreis-Sitzsimulator</h1>
+    <button type="button" id="explainToggle" class="icon-toggle" aria-pressed="false" title="Erklärmodus ein/aus">
+      <span aria-hidden="true">❓</span> Erklärmodus
+    </button>
+  </div>
+  <p class="subtitle">Berlin-Wahl 20.09.2026 &middot; echte Ergebnisse 2023</p>
+  <p class="hint">
+    <strong>Weißer Stimmzettel</strong> = Abgeordnetenhaus (Landesparlament, Erst- + Zweitstimme zusammen) &mdash; darum geht's hier.
+    <strong>Oranger Stimmzettel</strong> = BVV (Bezirk) &mdash; hier nicht abgebildet.
+  </p>
+</header>
+
+<main>
+
+  <section class="card">
+    <div class="row">
+      <input id="plzInput" type="text" placeholder="Deine PLZ, z.B. 10115" maxlength="5">
+      <button id="plzButton">Los</button>
+    </div>
+    <div class="row" id="wahlkreisRow" hidden>
+      <label>
+        Dein Wahlkreis
+        <select id="wahlkreisSelect"></select>
+      </label>
+    </div>
+    <p id="plzHint" class="hint"></p>
+  </section>
+
+  <section class="card" id="resultSection" hidden>
+    <h2 id="constituencyName"></h2>
+
+    <div class="toggle-group">
+      <button type="button" id="basis2023Button" class="toggle-button active">2023 (amtlich)</button>
+      <button type="button" id="basisAktuellButton" class="toggle-button">Aktuell (Umfrage)</button>
+    </div>
+    <div id="basisInfo" class="basis-info"></div>
+
+    <div class="explain-box">
+      <strong>Baustein 1 &mdash; Erststimme: Wer gewinnt hier vor Ort?</strong> In deinem Wahlkreis treten
+      Personen gegeneinander an. Wer die meisten Erststimmen bekommt, gewinnt &mdash; es reicht mehr als alle
+      anderen, keine 50% nötig. Beispiel: CDU 12.000, SPD 10.000, Grüne 8.000 &rarr; CDU gewinnt den
+      Wahlkreis (Direktmandat), auch ohne Mehrheit.
+      <br><br>
+      <strong>Baustein 2 &mdash; Zweitstimme: Wie stark soll jede Partei insgesamt sein?</strong> Die
+      Zweitstimme zählt berlinweit und bestimmt, wie viele Sitze jede Partei im ganzen Parlament bekommt
+      (über die Bezirksliste). Wie aus Stimmenanteilen ganze Sitze werden, erklärt Sainte-Laguë weiter unten.
+    </div>
+
+    <div class="split">
+      <div>
+        <h4 id="firstVoteLabel">Erststimme (Direktkandidat:in)</h4>
+        <div id="firstVoteBaseline" class="bars"></div>
+      </div>
+      <div>
+        <h4 id="secondVoteLabel">Zweitstimme (Partei)</h4>
+        <div id="secondVoteBaseline" class="bars"></div>
+      </div>
+    </div>
+
+    <h3>Baustein 3 &mdash; Szenario: Testrechnung, keine einzelne Stimme</h3>
+    <p class="hint">
+      <strong>Wichtig:</strong> Eine einzelne Stimme verändert das Berliner Ergebnis nicht messbar. Diese
+      Simulation testet stattdessen ein Szenario: <em>Wie sähe die Sitzverteilung aus, wenn die gewählte
+      Partei berlinweit 3 Prozentpunkte stärker abschneidet als im Ausgangswert?</em> Wähle unten eine Partei,
+      die wir testweise stärker rechnen &mdash; das zeigt dir die Richtung des Effekts, nicht die Wirkung
+      deiner persönlichen Stimme.
+    </p>
+    <div class="explain-box">
+      <strong>Was heißt "3 Prozentpunkte"?</strong> Steht eine Partei bei 17%, landet sie im Szenario bei
+      ungefähr 20% &mdash; <em>Punkte</em>, nicht Prozent (von 17 auf 20 sind +3 Prozentpunkte, aber
+      +18% relativ). Diese 3 Punkte kommen proportional von allen anderen Parteien: eine Partei mit 30%
+      verliert dabei mehr Stimmen als eine mit 5%, die Gesamtsumme bleibt gleich.
+      <br><br>
+      Das ist etwas anderes als die "Aktuell (Umfrage)"-Verschiebung oben: die überträgt eine echte,
+      bereits gemessene Umfrage-Veränderung gleichmäßig auf alle Wahlkreise. Diese Szenario-Verschiebung hier
+      ist rein hypothetisch &mdash; du bestimmst sie selbst, indem du eine Partei auswählst.
+    </div>
+    <div class="row">
+      <label>
+        Erststimme testweise an
+        <select id="firstVoteSelect"></select>
+      </label>
+      <label>
+        Zweitstimme testweise an
+        <select id="secondVoteSelect"></select>
+      </label>
+    </div>
+    <button id="simulateButton"><span id="simulateButtonLabel">Szenario durchrechnen</span></button>
+  </section>
+
+  <section class="card" id="simSection" hidden>
+    <h2>Ergebnis des Szenarios</h2>
+    <div class="explain-box">
+      <strong>Wie aus Stimmenanteilen Sitze werden (Sainte-Laguë):</strong> Jede Partei unter 5% der
+      Zweitstimmen fliegt komplett raus (5%-Hürde) &mdash; ihre Stimmen zählen für die Sitzverteilung nicht
+      mehr mit, auch nicht anteilig. Von den restlichen Parteien bekommt reihum die mit dem höchsten
+      Quotienten (Stimmen ÷ (2 × bisherige Sitze + 1)) den nächsten Sitz, bis alle Sitze vergeben sind. Je
+      mehr Sitze eine Partei schon hat, desto kleiner wird ihr Quotient &mdash; dadurch pendelt sich die
+      Verteilung nah an den Stimmenanteilen ein.
+      <br><br>
+      <strong>Überhang- und Ausgleichsmandate:</strong> Gewinnt eine Partei mehr Wahlkreise (Direktmandate)
+      als ihr nach der Zweitstimme eigentlich zustehen, darf sie die trotzdem behalten (Überhang) &mdash;
+      direkt gewählten Personen kann man das Mandat nicht wegnehmen. Damit die Sitzverteilung insgesamt
+      wieder ungefähr proportional ist, wächst das ganze Parlament, bis es wieder passt (Ausgleichsmandate).
+      Start ist 130 Sitze, am Ende können es mehr sein.
+      <br><br>
+      <strong>Warum ändert sich manchmal nur eine Partei, manchmal mehrere?</strong> Der zuletzt vergebene
+      Sitz geht immer an den knapp höchsten Quotienten &mdash; das ist die "Schwelle". Verschiebst du Stimmen,
+      ändern sich alle Quotienten ein bisschen, aber kippen tut nur ein Sitz, der ohnehin schon knapp an der
+      Schwelle lag. Eine Partei mit deutlichem Abstand zur Schwelle merkt von der Verschiebung nichts, egal
+      wie viele Punkte du verschiebst. Unten siehst du nach dem Durchrechnen, wer bei diesem Ergebnis an der
+      Schwelle lag.
+    </div>
+    <div class="split">
+      <div>
+        <h4 id="baselineSeatsLabel">Basis (2023)</h4>
+        <div id="baselineSeats" class="bars"></div>
+      </div>
+      <div>
+        <h4>Szenario (Testrechnung)</h4>
+        <div id="scenarioSeats" class="bars"></div>
+      </div>
+    </div>
+    <table id="deltaTable">
+      <thead><tr><th>Partei</th><th>Basis</th><th>Szenario</th><th>Delta</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p id="afdCallout" class="afd-callout"></p>
+    <div id="quotientExplain" class="explain-box"></div>
+  </section>
+
+  <section class="card" id="architectureSection" hidden>
+    <h2>Wie die App funktioniert</h2>
+    <pre class="arch-diagram">PLZ eingeben
+  │
+  ▼
+Bezirk erkannt (PLZ → Bezirk, data.js: BEZIRKE)
+  │
+  ▼
+Wahlkreis aus Bezirks-Liste wählen (data.js: CONSTITUENCIES)
+  │
+  ▼
+Echtes Ergebnis 2023 anzeigen (Erst-/Zweitstimme)
+  │
+  ▼
+optional: auf aktuellen Wahltrend umschalten
+(engine.js: buildCurrentBaseline, Umfrage-Verschiebung = "Uniform Swing")
+  │
+  ▼
+Szenario: Partei testweise stärker rechnen (nicht: einzelne Stimme)
+  │
+  ▼
+engine.js: Sainte-Laguë + 5%-Hürde + feste Szenario-Verschiebung (3 Pp.)
+  │
+  ▼
+Basis-Sitze vs. Szenario-Sitze → Delta-Tabelle + AfD-Callout + Warum-Erklärung</pre>
+    <table class="arch-files">
+      <tbody>
+        <tr><td><code>data.js</code></td><td>Parteien, Bezirke (PLZ-Listen), 78 Wahlkreise mit echten 2023-Stimmen, aktueller Wahltrend (CURRENT_POLL). Reine Daten, keine Logik.</td></tr>
+        <tr><td><code>engine.js</code></td><td>Sitzberechnung (Sainte-Laguë, 5%-Hürde, vereinfachter Ausgleich) + zwei verschiedene Verschiebungen: Umfrage-Verschiebung (Uniform Swing, für "Aktuell") und Szenario-Verschiebung (fürs Durchrechnen). Reine Funktionen, kennt kein HTML.</td></tr>
+        <tr><td><code>app.js</code></td><td>Verbindet data.js + engine.js mit der Seite: PLZ-Lookup, Dropdowns, Balken/Tabellen rendern.</td></tr>
+        <tr><td><code>index.html</code> / <code>style.css</code></td><td>Struktur und Styling. Kein Framework, kein Build-Schritt, kein Backend.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</main>
+
+<footer>
+  <p>
+    Keine Wahlempfehlung, nur eine Modellrechnung: echte Ergebnisse 2023 (Landeswahlleiterin Berlin), optional
+    verschoben auf den aktuellen Berlin-Wahltrend (dawum.de, gleichmäßig auf alle Wahlkreise übertragen). Die
+    Szenario-Funktion simuliert <em>nicht</em> deine einzelne Stimme, sondern die Frage "was wäre, wenn eine
+    Partei berlinweit 3 Prozentpunkte stärker abschneidet". Wahlrecht stark vereinfacht (u.a. keine
+    Grundmandatsklausel, echte Bezirkslisten-Mechanik nur angenähert). PLZ-Zuordnung: Berlin-PLZ überschneiden
+    sich mit Bezirksgrenzen, darum wählst du deinen Wahlkreis aus einer kurzen Liste statt automatisch exakt
+    zugeordnet zu werden.
+  </p>
+  <button id="architectureButton" class="link-button">Wie funktioniert diese App? (Architektur)</button>
+</footer>
+
+<script src="data.js"></script>
+<script src="engine.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
