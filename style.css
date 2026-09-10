@@ -53,6 +53,11 @@ header .hint { margin-bottom: 20px; }
 .explain-box li { margin-bottom: 6px; }
 body.explain-mode .explain-box { display: block; }
 
+/* Modus 2 ("Ich will verstehen"): ganze Bloecke, nicht nur einzelne Boxen */
+.detail-only { display: none; }
+body.explain-mode .detail-only[hidden] { display: none; }
+body.explain-mode .detail-only:not([hidden]) { display: block; }
+
 .card {
   background: #fff;
   border: 1px solid #e0e0e0;
@@ -159,6 +164,66 @@ button.is-loading::after {
   color: #7a1f1f;
   margin: 12px 0;
 }
+
+/* Empfehlungs-Karte: Erststimme/Zweitstimme, groß und ohne Fachbegriffe */
+.reco-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+@media (max-width: 560px) {
+  .reco-grid { grid-template-columns: 1fr; }
+}
+.reco-block {
+  background: #f7f9fc;
+  border: 1px solid #dde6f0;
+  border-radius: 8px;
+  padding: 14px;
+  text-align: center;
+}
+.reco-icon { font-size: 1.4rem; margin-bottom: 2px; }
+.reco-label { font-size: 0.8rem; color: #555; text-transform: uppercase; letter-spacing: 0.02em; }
+.reco-party { font-size: 1.4rem; font-weight: 700; margin: 4px 0 6px; }
+.reco-text { font-size: 0.88rem; color: #333; margin: 0; text-align: left; }
+
+.effect-box {
+  background: #fdf2f2;
+  border: 1px solid #f3c9c9;
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 14px;
+  text-align: center;
+}
+.effect-label { font-size: 0.8rem; color: #7a1f1f; text-transform: uppercase; letter-spacing: 0.02em; margin-bottom: 4px; }
+.effect-numbers { font-size: 1.3rem; font-weight: 700; color: #7a1f1f; }
+.effect-note { font-size: 0.85rem; color: #7a1f1f; margin: 6px 0 0; }
+
+.baseline-scenario-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+.bs-col { text-align: center; }
+.bs-label { font-size: 0.78rem; color: #666; margin-bottom: 2px; }
+.bs-value { font-size: 1rem; font-weight: 600; }
+.bs-arrow { font-size: 1.2rem; color: #999; }
+.bs-caption { text-align: center; margin-top: 4px; }
+
+.swing-row { align-items: center; gap: 16px; }
+.swing-label { min-width: 220px; }
+.swing-label input[type="range"] { width: 100%; padding: 0; border: none; }
+.swing-presets { display: flex; gap: 6px; flex-wrap: wrap; }
+.preset-button {
+  background: #fff;
+  color: #444;
+  border: 1px solid #ccc;
+  font-size: 0.8rem;
+  padding: 6px 10px;
+}
+.preset-button.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
 
 .split {
   display: grid;

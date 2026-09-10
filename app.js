@@ -1,29 +1,29 @@
-// Szenario-Verschiebung fuers Durchrechnen (nicht zu verwechseln mit der
-// Umfrage-Verschiebung/"Uniform Swing" fuer den "Aktuell"-Modus, siehe
-// buildCurrentBaseline in engine.js). Simuliert NICHT eine einzelne Stimme,
-// sondern die Frage "was waere, wenn Partei X berlinweit X Prozentpunkte
-// staerker abschneidet". Fest verdrahtet, kein Regler, damit die App einfach
-// bleibt.
-const SWING_PCT = 3;
+// Verbindet data.js (Fakten) + engine.js (Berechnung) mit der Seite.
+// Modus 1 (Default): automatische Empfehlung, kein Fachvokabular.
+// Modus 2 (explain-mode, siehe style.css .detail-only): Sainte-Laguë,
+// Quotienten, eigene Szenario-Verschiebung zum Experimentieren.
 
-// Umfrage-Anteile auf die 6 getrackten Parteien normieren (dawum-Rohwerte
-// summieren wegen BSW/Sonstige nicht auf 100), damit sie mit den
-// 2023-Landesanteilen (die nur diese 6 Parteien kennen) vergleichbar sind.
+let swingPct = 3;
 const pollShareSum = Object.values(CURRENT_POLL.shares).reduce((a, b) => a + b, 0);
 const normalizedPollShares = Object.fromEntries(
   Object.entries(CURRENT_POLL.shares).map(([party, pct]) => [party, pct / pollShareSum])
 );
 
 const CURRENT_CONSTITUENCIES = buildCurrentBaseline(CONSTITUENCIES, normalizedPollShares);
-
 const DATASETS = { "2023": CONSTITUENCIES, aktuell: CURRENT_CONSTITUENCIES };
-let basisMode = "2023";
+let basisMode = "aktuell";
 
 function partyName(id) {
   return PARTIES.find((p) => p.id === id)?.name || id;
 }
 function partyColor(id) {
   return PARTIES.find((p) => p.id === id)?.color || "#999";
+}
+function formatVotes(v) {
+  return Math.round(v).toLocaleString("de-DE");
+}
+function formatQuotient(q) {
+  return q === null || q === undefined ? "–" : Math.round(q).toLocaleString("de-DE");
 }
 
 function findBezirkeByPlz(plz) {
@@ -68,6 +68,7 @@ function renderBars(container, votesObj, options = {}) {
 function fillPartySelect(select) {
   select.innerHTML = "";
   for (const p of PARTIES) {
+    if (p.id === "afd") continue;
     const opt = document.createElement("option");
     opt.value = p.id;
     opt.textContent = p.name;
@@ -85,6 +86,18 @@ const wahlkreisRow = document.getElementById("wahlkreisRow");
 const wahlkreisSelect = document.getElementById("wahlkreisSelect");
 const resultSection = document.getElementById("resultSection");
 const constituencyName = document.getElementById("constituencyName");
+
+const firstRecoParty = document.getElementById("firstRecoParty");
+const firstRecoText = document.getElementById("firstRecoText");
+const secondRecoParty = document.getElementById("secondRecoParty");
+const secondRecoText = document.getElementById("secondRecoText");
+const effectNumbers = document.getElementById("effectNumbers");
+const effectNote = document.getElementById("effectNote");
+const bsBaselineLabel = document.getElementById("bsBaselineLabel");
+const bsBaselineValue = document.getElementById("bsBaselineValue");
+const bsScenarioValue = document.getElementById("bsScenarioValue");
+
+const detailSection = document.getElementById("detailSection");
 const firstVoteSelect = document.getElementById("firstVoteSelect");
 const secondVoteSelect = document.getElementById("secondVoteSelect");
 const simulateButton = document.getElementById("simulateButton");
@@ -96,6 +109,10 @@ const simulateButtonLabel = document.getElementById("simulateButtonLabel");
 const firstVoteLabel = document.getElementById("firstVoteLabel");
 const secondVoteLabel = document.getElementById("secondVoteLabel");
 const baselineSeatsLabel = document.getElementById("baselineSeatsLabel");
+const marginExplain = document.getElementById("marginExplain");
+const swingSlider = document.getElementById("swingSlider");
+const swingValue = document.getElementById("swingValue");
+const presetButtons = document.querySelectorAll(".preset-button");
 
 fillPartySelect(firstVoteSelect);
 fillPartySelect(secondVoteSelect);
@@ -103,6 +120,7 @@ fillPartySelect(secondVoteSelect);
 plzButton.addEventListener("click", () => {
   const plz = plzInput.value.trim();
   resultSection.hidden = true;
+  detailSection.hidden = true;
   simSection.hidden = true;
 
   const bezirke = findBezirkeByPlz(plz);
@@ -144,7 +162,7 @@ wahlkreisSelect.addEventListener("change", () => {
 function pollShareList() {
   return Object.entries(CURRENT_POLL.shares)
     .sort((a, b) => b[1] - a[1])
-    .map(([party, pct]) => `${partyName(party)} ${pct.toFixed(1)} %`)
+    .map(([party, pct]) => `${partyName(party)} ${pct.toFixed(1)} %`)
     .join(" · ");
 }
 
@@ -166,6 +184,7 @@ function updateBasisLabels() {
   firstVoteLabel.textContent = isAktuell ? "Erststimme (Modell, Stand aktuell)" : "Erststimme 2023 (Direktkandidat:in)";
   secondVoteLabel.textContent = isAktuell ? "Zweitstimme (Modell, Stand aktuell)" : "Zweitstimme 2023 (Partei)";
   baselineSeatsLabel.textContent = isAktuell ? "Basis (aktuell)" : "Basis (2023)";
+  bsBaselineLabel.textContent = isAktuell ? "Aktuelle Prognose (Sonntagsfrage)" : "Amtliches Ergebnis 2023";
 }
 
 function showConstituency(constituencyId) {
@@ -178,7 +197,110 @@ function showConstituency(constituencyId) {
   updateBasisLabels();
   renderBars(document.getElementById("firstVoteBaseline"), currentConstituency.firstVotes);
   renderBars(document.getElementById("secondVoteBaseline"), currentConstituency.secondVotes);
+
+  computeAndRenderRecommendation();
+
   resultSection.hidden = false;
+  detailSection.hidden = false;
+}
+
+function renderFirstVoteRecommendation(firstReco) {
+  if (!firstReco.recommendedParty) {
+    firstRecoParty.textContent = "–";
+    firstRecoText.textContent = "Für diesen Wahlkreis liegen keine ausreichenden Daten vor.";
+    return;
+  }
+
+  firstRecoParty.textContent = partyName(firstReco.recommendedParty);
+
+  if (firstReco.avoidLeads) {
+    firstRecoText.textContent =
+      `AfD liegt hier mit ${formatVotes(firstReco.avoidVotes)} Stimmen vorn. ` +
+      `${partyName(firstReco.recommendedParty)} ist mit ${formatVotes(firstReco.recommendedVotes)} Stimmen die ` +
+      `stärkste Alternative — strategisch sinnvollste Wahl, um das Direktmandat zu verhindern.`;
+  } else if (firstReco.avoidCompetitive) {
+    firstRecoText.textContent =
+      `${partyName(firstReco.recommendedParty)} liegt hier vorn, AfD auf Platz 2. Mit deiner Erststimme hilfst ` +
+      `du, das so zu halten.`;
+  } else {
+    firstRecoText.textContent =
+      `${partyName(firstReco.recommendedParty)} gewinnt hier voraussichtlich. AfD spielt in diesem Wahlkreis ` +
+      `bei der Erststimme keine große Rolle — wähl nach deiner Überzeugung.`;
+  }
+}
+
+function renderSecondVoteRecommendation(secondReco) {
+  const baselineSeats = secondReco.baselineSeats;
+
+  if (secondReco.bestDelta === 0) {
+    secondRecoParty.textContent = "keine eindeutige Partei";
+    secondRecoText.textContent =
+      `In unserem Modell verändert bei +${swingPct} Prozentpunkten keine der getesteten Parteien allein die ` +
+      `AfD-Sitzzahl. Die Zweitstimme bleibt trotzdem wichtig für die Sitzverteilung insgesamt — wähl nach ` +
+      `deiner Überzeugung.`;
+    effectNumbers.textContent = `AfD: ${baselineSeats} Sitze (unverändert im Modell)`;
+    effectNote.textContent = `Getestet: +${swingPct} Prozentpunkte für jede Partei einzeln, AfD-Sitzzahl blieb jeweils gleich.`;
+    return null;
+  }
+
+  const chosen = secondReco.bestParties[0];
+  const names = secondReco.bestParties.map((r) => partyName(r.party)).join(" oder ");
+  secondRecoParty.textContent = names;
+  secondRecoText.textContent =
+    `In unserem Modell schwächt eine Verschiebung hin zu ${names} die AfD-Sitzzahl am stärksten (kein ` +
+    `ideologischer Automatismus — nur die Partei, die im Modell am nächsten an der nächsten Sitz-Schwelle lag).`;
+  effectNumbers.textContent = `AfD: ${chosen.baselineSeats} → ${chosen.scenarioSeats} Sitze (${chosen.delta})`;
+  effectNote.textContent = "";
+  return chosen;
+}
+
+function renderMarginExplain(baseline, chosenParty) {
+  const afdVotes = votesToNextSeat(baseline, "afd");
+  const parts = [];
+
+  if (afdVotes !== null) {
+    parts.push(
+      `<li><strong>AfD</strong> fehlen in unserem Modell aktuell ungefähr ${formatVotes(afdVotes)} zusätzliche ` +
+        `Zweitstimmen (berlinweit, alles andere gleich) für einen weiteren Sitz &mdash; das entspricht ungefähr ` +
+        `${formatVotes(afdVotes)} zusätzlichen Wähler:innen.</li>`
+    );
+  } else {
+    parts.push(`<li><strong>AfD</strong> liegt unter der 5%-Hürde &mdash; die Quotienten-Rechnung setzt erst darüber an.</li>`);
+  }
+
+  if (chosenParty) {
+    const partyVotes = votesToNextSeat(baseline, chosenParty);
+    if (partyVotes !== null) {
+      parts.push(
+        `<li><strong>${partyName(chosenParty)}</strong> fehlen ungefähr ${formatVotes(partyVotes)} zusätzliche ` +
+          `Zweitstimmen für den nächsten Sitz.</li>`
+      );
+    }
+  }
+
+  marginExplain.innerHTML = `<ul>${parts.join("")}</ul>`;
+}
+
+function computeAndRenderRecommendation() {
+  const dataset = DATASETS[basisMode];
+  const baseline = allocateParliament(dataset);
+
+  const firstReco = recommendDirectMandateAgainst(currentConstituency, baseline.eligibleParties, "afd");
+  renderFirstVoteRecommendation(firstReco);
+
+  const secondReco = recommendSecondVoteAgainst(dataset, "afd", swingPct);
+  const chosen = renderSecondVoteRecommendation(secondReco);
+
+  const scenarioAllocation = chosen ? chosen.scenario : baseline;
+  const baselinePct = ((baseline.totals.afd || 0) / baseline.totalValid) * 100;
+  const scenarioPct = ((scenarioAllocation.totals.afd || 0) / scenarioAllocation.totalValid) * 100;
+  bsBaselineValue.textContent = `AfD ${baselinePct.toFixed(1)} % → ${baseline.seats.afd || 0} Sitze`;
+  bsScenarioValue.textContent = `AfD ${scenarioPct.toFixed(1)} % → ${scenarioAllocation.seats.afd || 0} Sitze`;
+
+  renderMarginExplain(baseline, chosen ? chosen.party : null);
+
+  if (firstReco.recommendedParty) firstVoteSelect.value = firstReco.recommendedParty;
+  if (chosen) secondVoteSelect.value = chosen.party;
 }
 
 basis2023Button.addEventListener("click", () => {
@@ -190,6 +312,19 @@ basisAktuellButton.addEventListener("click", () => {
   if (currentConstituencyId) showConstituency(currentConstituencyId);
 });
 
+function setSwing(value) {
+  swingPct = value;
+  swingSlider.value = value;
+  swingValue.textContent = value;
+  presetButtons.forEach((b) => b.classList.toggle("active", Number(b.dataset.swing) === value));
+  if (currentConstituency) computeAndRenderRecommendation();
+}
+
+swingSlider.addEventListener("input", () => setSwing(Number(swingSlider.value)));
+presetButtons.forEach((b) => {
+  b.addEventListener("click", () => setSwing(Number(b.dataset.swing)));
+});
+
 simulateButton.addEventListener("click", () => {
   if (!currentConstituency || simulateButton.disabled) return;
 
@@ -198,15 +333,15 @@ simulateButton.addEventListener("click", () => {
   simulateButtonLabel.textContent = "Simuliere …";
   simSection.classList.remove("fade-in");
 
-  setTimeout(runSimulation, 400);
+  setTimeout(runDetailSimulation, 400);
 });
 
-function runSimulation() {
+function runDetailSimulation() {
   const params = {
     constituencyId: currentConstituency.id,
     firstVoteParty: firstVoteSelect.value,
     secondVoteParty: secondVoteSelect.value,
-    swingPct: SWING_PCT,
+    swingPct,
   };
 
   const { baseline, scenario } = simulate(DATASETS[basisMode], params);
@@ -236,31 +371,22 @@ function runSimulation() {
   const afdAfter = scenario.seats.afd || 0;
   const afdDelta = afdAfter - afdBefore;
   document.getElementById("afdCallout").innerHTML =
-    `<strong>AfD im Szenario:</strong> ${afdBefore} &rarr; ${afdAfter} Sitze (${afdDelta > 0 ? "+" : ""}${afdDelta}). ` +
+    `<strong>AfD in dieser Testrechnung:</strong> ${afdBefore} &rarr; ${afdAfter} Sitze (${afdDelta > 0 ? "+" : ""}${afdDelta}). ` +
     `Die simulierte Zweitstimmen-Verschiebung wirkt auf ganz Berlin, die Erststimmen-Verschiebung nur auf ` +
     `1 Direktmandat in ${currentConstituency.name}.`;
 
   renderQuotientExplain(baseline, scenario);
 
   simSection.hidden = false;
-  // reflow erzwingen, damit die fade-in-Animation bei jedem Klick neu abspielt
   void simSection.offsetWidth;
   simSection.classList.add("fade-in");
   simSection.scrollIntoView({ behavior: "smooth", block: "start" });
 
   simulateButton.disabled = false;
   simulateButton.classList.remove("is-loading");
-  simulateButtonLabel.textContent = "Szenario durchrechnen";
+  simulateButtonLabel.textContent = "Szenario neu berechnen";
 }
 
-function formatQuotient(q) {
-  return q === null || q === undefined ? "–" : Math.round(q).toLocaleString("de-DE");
-}
-
-// Erklaert im Erklaermodus, warum genau diese Parteien Sitze gewonnen/
-// verloren haben: zeigt fuer jede veraenderte Partei ihren Sainte-Laguë-
-// Quotienten fuer den naechsten Sitz vs. die Schwelle (cutoffQuotient),
-// jeweils in Basis und Szenario.
 function renderQuotientExplain(baseline, scenario) {
   const box = document.getElementById("quotientExplain");
   const allParties = new Set([...Object.keys(baseline.seats), ...Object.keys(scenario.seats)]);

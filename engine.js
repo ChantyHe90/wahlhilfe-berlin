@@ -233,3 +233,79 @@ function buildCurrentBaseline(constituencies, pollShares) {
     secondVotes: applyUniformSwing(c.secondVotes, pollShares, baseline2023Second),
   }));
 }
+
+// Strategische Erststimmen-Empfehlung: wer im Wahlkreis am ehesten
+// avoidPartyId (z.B. "afd") ein Direktmandat vermasseln kann. Engine kennt
+// hier bewusst nur die uebergebene PartyId, keine Namen/Bedeutung.
+// eligibleParties = Land-weit 5%-Huerden-Parteien (wie getConstituencyWinners
+// es auch handhabt) - dieselbe Vereinfachung wie beim echten Sitzausgleich.
+function recommendDirectMandateAgainst(constituency, eligibleParties, avoidPartyId) {
+  const entries = Object.entries(constituency.firstVotes)
+    .filter(([p]) => eligibleParties.includes(p))
+    .sort((a, b) => b[1] - a[1]);
+  const avoidIndex = entries.findIndex(([p]) => p === avoidPartyId);
+  const challengers = entries.filter(([p]) => p !== avoidPartyId);
+  const leader = entries[0] || null;
+  const avoidEntry = avoidIndex >= 0 ? entries[avoidIndex] : null;
+  const avoidLeads = avoidIndex === 0;
+  const recommended = avoidLeads ? challengers[0] : leader;
+
+  let margin = null;
+  if (recommended && avoidEntry) {
+    margin = avoidLeads ? avoidEntry[1] - recommended[1] : recommended[1] - avoidEntry[1];
+  }
+
+  return {
+    recommendedParty: recommended ? recommended[0] : null,
+    recommendedVotes: recommended ? recommended[1] : null,
+    avoidLeads,
+    avoidCompetitive: avoidIndex !== -1 && avoidIndex <= 1,
+    avoidVotes: avoidEntry ? avoidEntry[1] : 0,
+    margin,
+    ranking: entries,
+  };
+}
+
+// Wie simulate(), aber nur die Zweitstimmen-Verschiebung (berlinweit), ohne
+// lokale Erststimmen-Aenderung - die braucht keinen Wahlkreis-Bezug.
+function simulateSecondVoteOnly(constituencies, secondVoteParty, swingPct) {
+  const scenarioConstituencies = buildScenario(constituencies, {
+    constituencyId: null,
+    firstVoteParty: null,
+    secondVoteParty,
+    swingPct,
+  });
+  return allocateParliament(scenarioConstituencies);
+}
+
+// Testet fuer jede Partei (ausser avoidPartyId) dieselbe Szenario-Verschiebung
+// und vergleicht, wie sich das auf die Sitzzahl von avoidPartyId auswirkt.
+// Liefert eine sortierbare Liste - keine versteckte "beste Partei"-Magie,
+// nur dieselbe applySwing()-Rechnung pro Partei durchgefuehrt.
+function recommendSecondVoteAgainst(constituencies, avoidPartyId, swingPct) {
+  const baseline = allocateParliament(constituencies);
+  const baselineSeats = baseline.seats[avoidPartyId] || 0;
+  const partyIds = Object.keys(sumSecondVotes(constituencies)).filter((p) => p !== avoidPartyId);
+
+  const results = partyIds.map((party) => {
+    const scenario = simulateSecondVoteOnly(constituencies, party, swingPct);
+    const scenarioSeats = scenario.seats[avoidPartyId] || 0;
+    return { party, baselineSeats, scenarioSeats, delta: scenarioSeats - baselineSeats, scenario };
+  });
+
+  const bestDelta = results.length ? Math.min(...results.map((r) => r.delta)) : 0;
+  const bestParties = results.filter((r) => r.delta === bestDelta);
+
+  return { baseline, baselineSeats, results, bestDelta, bestParties };
+}
+
+// Wie viele zusaetzliche Zweitstimmen (berlinweit, alles andere gleich)
+// braucht eine Partei ungefaehr fuer ihren naechsten Sitz - aus cutoffQuotient
+// und dem eigenen naechsten Quotienten hergeleitet (gleiche Mechanik wie
+// renderQuotientExplain in app.js, nur als Zahl statt als Text).
+function votesToNextSeat(allocation, party) {
+  const q = allocation.quotients[party];
+  if (!q) return null;
+  const needed = allocation.cutoffQuotient * (2 * q.seats + 1) - (allocation.totals[party] || 0);
+  return Math.max(0, Math.round(needed));
+}
