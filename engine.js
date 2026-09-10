@@ -1,47 +1,97 @@
-// Election Engine (PoC): Sainte-Lague Sitzzuteilung + 5%-Huerde +
+// Election Engine (PoC): Hare-Niemeyer-Sitzzuteilung + 5%-Huerde +
 // vereinfachte Ueberhang-/Ausgleichs-Logik. Kennt keine Parteinamen,
 // nur PartyId -> Stimmen. Bewusst stark vereinfacht (kein
-// Grundmandatsklausel, keine echten Landeslisten).
+// Grundmandatsklausel, keine echten Landeslisten, keine Bezirksebene).
 
-  // Sainte-Laguë — Sitzverteilungsverfahren. Rechnet Stimmen einer Partei in Sitze um, proportional. Mechanik in sainteLague(): jede
-  // Partei kriegt Quotient Stimmen / (2×bisherige_Sitze + 1). Höchster Quotient kriegt nächsten Sitz, Runde für Runde, bis alle Sitze
-  // vergeben. Ergebnis: Sitzanteil ≈ Stimmenanteil, rundet fair (kein systematischer Vor-/Nachteil für kleine/große Parteien wie bei
-  // anderen Verfahren, z.B. d'Hondt). Auch echtes Berlin-Wahlrecht nutzt Sainte-Laguë.
+  // Hare-Niemeyer (Quotenverfahren mit Restausgleich) — echtes Berlin-Wahlrecht fuer die Sitzverteilung des
+  // Abgeordnetenhauses. Mechanik in hareNiemeyer(): jede Partei bekommt zunaechst floor(totalSeats * Stimmen /
+  // Gesamtstimmen) Sitze (Ganzzahl-Anteil). Die restlichen Sitze gehen an die Parteien mit den hoechsten
+  // Nachkommastellen (Restanteilen) dieser Rechnung, bis alle Sitze vergeben sind.
+  //
+  // Bekannte Eigenschaft von Hare-Niemeyer (keine Implementierungs-Macke, sondern Eigenschaft des echten
+  // Verfahrens): nicht monoton. Mehr Gesamtsitze koennen einer Partei theoretisch einen Sitz *kosten*
+  // (Alabama-Paradoxon). Die Ausgleichs-Schleife unten (allocateParliament) kann das in Randfaellen zeigen.
+  //
+  // Rundungs-Gleichstand (zwei Parteien mit exakt demselben Restanteil um den letzten Sitz): echtes Wahlrecht
+  // entscheidet per Los. Diese App hat kein Zufallselement, deshalb deterministischer Tie-Break: erst hoehere
+  // absolute Stimmenzahl, dann alphabetisch nach PartyId. Nur fuer Reproduzierbarkeit, kein Abbild der
+  // amtlichen Losverfahren-Praxis.
 
-  // 5%-Hürde — Partei unter 5% der Zweitstimmen (berlinweit) kriegt keine Sitze, fliegt komplett aus der Sainte-Laguë-Rechnung raus.
-  // In allocateParliament(): eligibleParties filtert das vorher.
+  // 5%-Hürde — Partei unter 5% der Zweitstimmen (berlinweit) kriegt keine Sitze aus der Zweitstimmen-Rechnung,
+  // fliegt komplett aus der Hare-Niemeyer-Rechnung raus. In allocateParliament(): eligibleParties filtert das.
+  //
+  // Direktmandat und 5%-Huerde sind zwei getrennte Dinge und duerfen nicht vermischt werden: wer im Wahlkreis
+  // die meisten Erststimmen bekommt, gewinnt das Direktmandat — unabhaengig davon, ob die eigene Partei
+  // landesweit ueber oder unter 5% liegt (getConstituencyWinners() kennt eligibleParties nicht mehr). Ob eine
+  // Partei unter 5% ihr gewonnenes Direktmandat "einfach so" behaelt, obwohl sie sonst keine Sitze aus der
+  // Zweitstimmen-Rechnung bekommt, ist in echtem Wahlrecht ein Sonderfall (vergleichbar einer
+  // Grundmandatsklausel-Wirkung nur fuer die gewonnenen Wahlkreise, nicht fuer die ganze Landesliste). Diese
+  // App bildet das vereinfacht ab: siehe Kommentar bei der Ausgleichs-Schleife in allocateParliament().
 
-  // Szenario-Verschiebung (3 Pp., applySwing()) — simuliert NICHT eine einzelne Stimme, sondern die Frage "was waere,
-  // wenn Partei X berlinweit 3 Prozentpunkte staerker abschneidet". Die Prozentpunkte kommen proportional von allen
-  // anderen Parteien (Gesamtsumme bleibt gleich). Fest im Code (SWING_PCT = 3 in app.js), kein Regler.
+  // Szenario-Verschiebung (scenarioSwingPct, applySwing()) — simuliert NICHT eine einzelne Stimme, sondern die
+  // Frage "was waere, wenn Partei X berlinweit N Prozentpunkte staerker abschneidet". Die Prozentpunkte kommen
+  // proportional von allen anderen Parteien (Gesamtsumme bleibt gleich). Regler in der UI, kein fester Wert.
   //
   // Nicht zu verwechseln mit der Umfrage-Verschiebung (applyUniformSwing(), Fachbegriff "Uniform Swing"): die
   // ueberschreibt die 2023-Basis mit einer echten, bereits gemessenen Umfrage, gleichmaessig auf alle Wahlkreise
-  // verteilt. Zwei unterschiedliche Mechanismen, beide verschieben Stimmenanteile, aber zu unterschiedlichen Zwecken.
+  // verteilt. Zwei unterschiedliche Mechanismen, beide verschieben Stimmenanteile, aber zu unterschiedlichen
+  // Zwecken.
 
-  // Zusatz, nicht im Diagramm-Text: engine.js macht noch vereinfachte Überhang-/Ausgleichsmandate — zählt Sitze hoch bis jede Partei
-  // mindestens so viele Sitze hat wie Direktmandate gewonnen (while-Schleife in allocateParliament()).
+  // Zusatz, nicht im Diagramm-Text: engine.js macht noch vereinfachte Überhang-/Ausgleichsmandate — zählt Sitze
+  // hoch bis jede Partei ueber der 5%-Huerde mindestens so viele Sitze hat wie Direktmandate gewonnen
+  // (while-Schleife in allocateParliament()). Parteien unter der 5%-Huerde mit Direktmandat bekommen ihre
+  // Direktmandate separat obendrauf, ausserhalb der proportionalen Rechnung (siehe Kommentar dort) — kein
+  // echtes Ueberhang-/Ausgleichsmandatsverfahren fuer diesen Fall, nur eine sichtbare Modellgrenze.
 
-function sainteLague(votes, totalSeats) {
-  // Divisorverfahren: in jeder Runde bekommt die Partei mit dem
-  // hoechsten votes/(2*seats+1) den naechsten Sitz.
+// Hare-Niemeyer-Sitzverteilung: floor(Quote) je Partei, Restsitze an die
+// hoechsten Nachkommastellen. Gibt neben den Sitzen auch die Rechenbasis pro
+// Partei zurueck (quota, remainder) sowie remainderCutoff (niedrigster
+// Restanteil, der noch einen Sitz bekam) - das Hare-Niemeyer-Aequivalent zu
+// einer Sainte-Laguë-Schwelle, siehe Kommentar oben.
+function hareNiemeyer(votes, totalSeats) {
   const partyIds = Object.keys(votes);
-  const seats = Object.fromEntries(partyIds.map((p) => [p, 0]));
+  const total = partyIds.reduce((sum, p) => sum + votes[p], 0);
 
-  for (let i = 0; i < totalSeats; i++) {
-    let bestParty = null;
-    let bestQuotient = -1;
-    for (const p of partyIds) {
-      const quotient = votes[p] / (2 * seats[p] + 1);
-      if (quotient > bestQuotient) {
-        bestQuotient = quotient;
-        bestParty = p;
-      }
-    }
-    if (bestParty === null) break;
-    seats[bestParty]++;
+  const seats = Object.fromEntries(partyIds.map((p) => [p, 0]));
+  const details = {};
+
+  if (total <= 0 || totalSeats <= 0) {
+    for (const p of partyIds) details[p] = { seats: 0, quota: 0, remainder: 0 };
+    return { seats, details, remainderCutoff: null };
   }
-  return seats;
+
+  let distributed = 0;
+  const remainders = [];
+  for (const p of partyIds) {
+    const quota = (totalSeats * votes[p]) / total;
+    const base = Math.floor(quota);
+    seats[p] = base;
+    distributed += base;
+    const remainder = quota - base;
+    details[p] = { seats: base, quota, remainder };
+    remainders.push({ party: p, remainder, votes: votes[p] });
+  }
+
+  const remainingSeats = totalSeats - distributed;
+
+  // Deterministischer Tie-Break, siehe Kommentar oben: hoechster Restanteil
+  // zuerst, bei exaktem Gleichstand hoehere Stimmenzahl, danach Partei-Id
+  // alphabetisch.
+  remainders.sort((a, b) => {
+    if (b.remainder !== a.remainder) return b.remainder - a.remainder;
+    if (b.votes !== a.votes) return b.votes - a.votes;
+    return a.party.localeCompare(b.party);
+  });
+
+  let remainderCutoff = null;
+  for (let i = 0; i < remainingSeats; i++) {
+    const p = remainders[i].party;
+    seats[p]++;
+    details[p].seats++;
+    remainderCutoff = remainders[i].remainder;
+  }
+
+  return { seats, details, remainderCutoff };
 }
 
 function sumSecondVotes(constituencies) {
@@ -54,14 +104,16 @@ function sumSecondVotes(constituencies) {
   return totals;
 }
 
-function getConstituencyWinners(constituencies, eligibleParties) {
+// Erststimme: wer im Wahlkreis die meisten Erststimmen hat, gewinnt das
+// Direktmandat - unabhaengig von der landesweiten 5%-Huerde (siehe
+// Datei-Kommentar oben). Kennt eligibleParties deshalb bewusst nicht mehr.
+function getConstituencyWinners(constituencies) {
   const winners = {};
   const directCounts = {};
   for (const c of constituencies) {
     let bestParty = null;
     let bestVotes = -1;
     for (const [party, votes] of Object.entries(c.firstVotes)) {
-      if (!eligibleParties.has(party)) continue; // vereinfachend: nur 5%-Parteien gewinnen Direktmandate
       if (votes > bestVotes) {
         bestVotes = votes;
         bestParty = party;
@@ -90,37 +142,42 @@ function allocateParliament(constituencies, options = {}) {
     Object.entries(totals).filter(([p]) => eligibleParties.has(p))
   );
 
-  const { winners, directCounts } = getConstituencyWinners(constituencies, eligibleParties);
+  const { winners, directCounts } = getConstituencyWinners(constituencies);
 
-  // Vereinfachte Ausgleichsmandate: Sitzzahl so lange erhoehen, bis
-  // jede Partei mindestens so viele Sitze per Sainte-Laguë bekommt,
-  // wie sie Direktmandate hat.
+  // Vereinfachte Ausgleichsmandate: Sitzzahl so lange erhoehen, bis jede
+  // *huerdenberechtigte* Partei mindestens so viele Sitze per Hare-Niemeyer
+  // bekommt, wie sie Direktmandate hat. Nur eligible Parteien pruefen, sonst
+  // wuerde eine Partei unter 5% mit Direktmandat (kann per Erststimme
+  // vorkommen, siehe oben) nie in eligibleVotes/seats auftauchen und die
+  // Schleife liefe bis zum guard-Limit durch.
   let totalSeats = baseSeats;
-  let seats = sainteLague(eligibleVotes, totalSeats);
+  let allocation = hareNiemeyer(eligibleVotes, totalSeats);
   let guard = 0;
   while (
-    Object.entries(directCounts).some(([p, d]) => (seats[p] || 0) < d) &&
+    Object.entries(directCounts).some(
+      ([p, d]) => eligibleParties.has(p) && (allocation.seats[p] || 0) < d
+    ) &&
     guard < 500
   ) {
     totalSeats++;
-    seats = sainteLague(eligibleVotes, totalSeats);
+    allocation = hareNiemeyer(eligibleVotes, totalSeats);
     guard++;
   }
 
-  // Quotienten-Info fuer den Erklaermodus: bei Sainte-Laguë bekommt in jeder
-  // Runde die Partei mit dem hoechsten Quotienten (Stimmen / (2*Sitze+1)) den
-  // naechsten Sitz. cutoffQuotient ist der niedrigste Quotient, der noch
-  // einen Sitz "gekauft" hat - das erklaert, warum ein kleiner Stimmenshift
-  // manchmal einen Sitz zwischen zwei Parteien verschiebt und manchmal nicht:
-  // nur wer nah an dieser Schwelle liegt, ist "wacklig".
-  let cutoffQuotient = Infinity;
-  const quotients = {};
-  for (const party of Object.keys(eligibleVotes)) {
-    const s = seats[party] || 0;
-    const lastQuotient = s > 0 ? eligibleVotes[party] / (2 * s - 1) : null;
-    const nextQuotient = eligibleVotes[party] / (2 * s + 1);
-    quotients[party] = { seats: s, lastQuotient, nextQuotient };
-    if (lastQuotient !== null && lastQuotient < cutoffQuotient) cutoffQuotient = lastQuotient;
+  const seats = { ...allocation.seats };
+
+  // Modellgrenze: gewinnt eine Partei unter der 5%-Huerde trotzdem ein
+  // Direktmandat, bekommt sie im echten Wahlrecht diesen einen Sitz (siehe
+  // Datei-Kommentar oben), aber keine Sitze aus der Zweitstimmen-Rechnung,
+  // weil ihre Zweitstimmen dort nicht mitzaehlen. Diese App zaehlt solche
+  // Direktmandate 1:1 obendrauf - kein echtes Ueberhang-/
+  // Ausgleichsmandatsverfahren fuer diesen Fall, nur eine sichtbare
+  // Modellgrenze statt einer scheinbar exakten Berechnung.
+  for (const [p, d] of Object.entries(directCounts)) {
+    if (!eligibleParties.has(p)) {
+      seats[p] = d;
+      totalSeats += d;
+    }
   }
 
   return {
@@ -131,18 +188,18 @@ function allocateParliament(constituencies, options = {}) {
     eligibleParties: [...eligibleParties],
     totals,
     totalValid,
-    quotients, // partyId -> { seats, lastQuotient, nextQuotient }
-    cutoffQuotient, // niedrigster Quotient, der im finalen Ergebnis noch einen Sitz bekam
+    remainders: allocation.details, // partyId -> { seats, quota, remainder (0..1) }
+    remainderCutoff: allocation.remainderCutoff, // niedrigster Restanteil, der im finalen Ergebnis noch einen Sitz bekam (null wenn keine Restsitze noetig waren)
   };
 }
 
-// Szenario-Verschiebung: die Zielpartei bekommt +swingPct Prozentpunkte,
-// alle anderen Parteien verlieren proportional zueinander, sodass die
-// Gesamtsumme gleich bleibt. Das ist eine hypothetische Testrechnung, keine
-// Simulation einer einzelnen abgegebenen Stimme.
-function applySwing(votesObj, targetParty, swingPct) {
+// Szenario-Verschiebung: die Zielpartei bekommt +scenarioSwingPct
+// Prozentpunkte, alle anderen Parteien verlieren proportional zueinander,
+// sodass die Gesamtsumme gleich bleibt. Das ist eine hypothetische
+// Testrechnung, keine Simulation einer einzelnen abgegebenen Stimme.
+function applySwing(votesObj, targetParty, scenarioSwingPct) {
   const total = Object.values(votesObj).reduce((a, b) => a + b, 0);
-  const shift = (swingPct / 100) * total;
+  const shift = (scenarioSwingPct / 100) * total;
 
   const oldTargetVotes = votesObj[targetParty] || 0;
   const othersTotal = total - oldTargetVotes;
@@ -164,14 +221,14 @@ function applySwing(votesObj, targetParty, swingPct) {
 // (Direktmandat), Zweitstimme wirkt als Szenario-Verschiebung auf alle
 // Wahlkreise gleichermassen (siehe Konzept "letzte Wahl + landesweite
 // Verschiebung").
-function buildScenario(constituencies, { constituencyId, firstVoteParty, secondVoteParty, swingPct }) {
+function buildScenario(constituencies, { constituencyId, firstVoteParty, secondVoteParty, scenarioSwingPct }) {
   return constituencies.map((c) => {
     const next = { ...c };
     if (c.id === constituencyId && firstVoteParty) {
-      next.firstVotes = applySwing(c.firstVotes, firstVoteParty, swingPct);
+      next.firstVotes = applySwing(c.firstVotes, firstVoteParty, scenarioSwingPct);
     }
     if (secondVoteParty) {
-      next.secondVotes = applySwing(c.secondVotes, secondVoteParty, swingPct);
+      next.secondVotes = applySwing(c.secondVotes, secondVoteParty, scenarioSwingPct);
     }
     return next;
   });
@@ -210,11 +267,20 @@ function computeLandShares(constituencies, voteKey) {
 // bleibt gleich (keine neuere lokale Wahlbeteiligung bekannt). Anders als
 // applySwing(): das hier ueberschreibt die Basis mit einer echten Umfrage,
 // keine hypothetische Testrechnung.
+//
+// Iteriert bewusst ueber die Vereinigung der Parteien aus votesObj UND
+// currentShares (nicht nur Object.keys(votesObj)): eine Partei, die in
+// currentShares neu auftaucht, aber im historischen votesObj (2023) noch
+// nicht existierte (z.B. BSW), soll trotzdem mit localShare 0 starten und
+// die volle currentShares/baselineShares-Differenz bekommen, statt beim
+// Verschieben komplett zu verschwinden. Vorher fehlerhaft: nur
+// Object.keys(votesObj) durchlaufen, neue Parteien wurden nie geschrieben.
 function applyUniformSwing(votesObj, currentShares, baselineShares) {
   const total = Object.values(votesObj).reduce((a, b) => a + b, 0);
+  const parties = new Set([...Object.keys(votesObj), ...Object.keys(currentShares)]);
   const result = {};
-  for (const party of Object.keys(votesObj)) {
-    const localShare = total > 0 ? votesObj[party] / total : 0;
+  for (const party of parties) {
+    const localShare = total > 0 ? (votesObj[party] || 0) / total : 0;
     const delta = (currentShares[party] || 0) - (baselineShares[party] || 0);
     result[party] = Math.max(0, localShare + delta) * total;
   }
@@ -224,12 +290,29 @@ function applyUniformSwing(votesObj, currentShares, baselineShares) {
 // Baut aus den 2023-Wahlkreisdaten eine "aktuelle" Variante: jeder
 // Wahlkreis behaelt seine 2023-Verteilung als lokale Grundlage, aber
 // landesweit verschoben auf die aktuellen Umfragewerte (pollShares).
+//
+// Modellgrenze BSW (und jede andere Partei ohne 2023-Wahlkreisdaten): fliesst
+// nur in die Zweitstimmen-Verschiebung ein (dort in die landesweite
+// Sitzberechnung), NICHT in die Erststimmen-Verschiebung. Grund: die
+// Zweitstimmen-Zahl je Wahlkreis war schon vorher fuer alle Parteien nur
+// "2023er Lokalverteilung + landesweite Umfrage-Differenz" - fuer eine
+// Partei ohne 2023-Anker (BSW) ist die lokale Zahl dann aber zu 100% aus dem
+// Landeswert konstruiert, ohne jede lokale Grundlage. Die App zeigt diese
+// Zahl deshalb bewusst nicht als Wahlkreis-Ergebnis an (siehe app.js), auch
+// wenn sie hier fuer die Sitzberechnung mitgerechnet wird. Fuer die
+// Erststimme gibt es dafuer keinen Anwendungsfall: keine erfundene lokale
+// Erststimmen-/Direktmandats-Verteilung fuer Parteien ohne echte 2023-Daten.
 function buildCurrentBaseline(constituencies, pollShares) {
   const baseline2023Second = computeLandShares(constituencies, "secondVotes");
   const baseline2023First = computeLandShares(constituencies, "firstVotes");
+
+  const firstVotePollShares = Object.fromEntries(
+    Object.entries(pollShares).filter(([party]) => party in baseline2023First)
+  );
+
   return constituencies.map((c) => ({
     ...c,
-    firstVotes: applyUniformSwing(c.firstVotes, pollShares, baseline2023First),
+    firstVotes: applyUniformSwing(c.firstVotes, firstVotePollShares, baseline2023First),
     secondVotes: applyUniformSwing(c.secondVotes, pollShares, baseline2023Second),
   }));
 }
@@ -237,8 +320,10 @@ function buildCurrentBaseline(constituencies, pollShares) {
 // Strategische Erststimmen-Empfehlung: wer im Wahlkreis am ehesten
 // avoidPartyId (z.B. "afd") ein Direktmandat vermasseln kann. Engine kennt
 // hier bewusst nur die uebergebene PartyId, keine Namen/Bedeutung.
-// eligibleParties = Land-weit 5%-Huerden-Parteien (wie getConstituencyWinners
-// es auch handhabt) - dieselbe Vereinfachung wie beim echten Sitzausgleich.
+// eligibleParties = Land-weit 5%-Huerden-Parteien: bewusste Vereinfachung
+// der Empfehlung (nur Parteien vorschlagen, die auch landesweit eine Rolle
+// spielen), unabhaengig davon, dass ein Direktmandat selbst laut
+// getConstituencyWinners() keine 5%-Huerde kennt.
 function recommendDirectMandateAgainst(constituency, eligibleParties, avoidPartyId) {
   const entries = Object.entries(constituency.firstVotes)
     .filter(([p]) => eligibleParties.includes(p))
@@ -268,12 +353,12 @@ function recommendDirectMandateAgainst(constituency, eligibleParties, avoidParty
 
 // Wie simulate(), aber nur die Zweitstimmen-Verschiebung (berlinweit), ohne
 // lokale Erststimmen-Aenderung - die braucht keinen Wahlkreis-Bezug.
-function simulateSecondVoteOnly(constituencies, secondVoteParty, swingPct) {
+function simulateSecondVoteOnly(constituencies, secondVoteParty, scenarioSwingPct) {
   const scenarioConstituencies = buildScenario(constituencies, {
     constituencyId: null,
     firstVoteParty: null,
     secondVoteParty,
-    swingPct,
+    scenarioSwingPct,
   });
   return allocateParliament(scenarioConstituencies);
 }
@@ -282,13 +367,13 @@ function simulateSecondVoteOnly(constituencies, secondVoteParty, swingPct) {
 // und vergleicht, wie sich das auf die Sitzzahl von avoidPartyId auswirkt.
 // Liefert eine sortierbare Liste - keine versteckte "beste Partei"-Magie,
 // nur dieselbe applySwing()-Rechnung pro Partei durchgefuehrt.
-function recommendSecondVoteAgainst(constituencies, avoidPartyId, swingPct) {
+function recommendSecondVoteAgainst(constituencies, avoidPartyId, scenarioSwingPct) {
   const baseline = allocateParliament(constituencies);
   const baselineSeats = baseline.seats[avoidPartyId] || 0;
   const partyIds = Object.keys(sumSecondVotes(constituencies)).filter((p) => p !== avoidPartyId);
 
   const results = partyIds.map((party) => {
-    const scenario = simulateSecondVoteOnly(constituencies, party, swingPct);
+    const scenario = simulateSecondVoteOnly(constituencies, party, scenarioSwingPct);
     const scenarioSeats = scenario.seats[avoidPartyId] || 0;
     return { party, baselineSeats, scenarioSeats, delta: scenarioSeats - baselineSeats, scenario };
   });
@@ -299,13 +384,41 @@ function recommendSecondVoteAgainst(constituencies, avoidPartyId, swingPct) {
   return { baseline, baselineSeats, results, bestDelta, bestParties };
 }
 
-// Wie viele zusaetzliche Zweitstimmen (berlinweit, alles andere gleich)
-// braucht eine Partei ungefaehr fuer ihren naechsten Sitz - aus cutoffQuotient
-// und dem eigenen naechsten Quotienten hergeleitet (gleiche Mechanik wie
-// renderQuotientExplain in app.js, nur als Zahl statt als Text).
-function votesToNextSeat(allocation, party) {
-  const q = allocation.quotients[party];
-  if (!q) return null;
-  const needed = allocation.cutoffQuotient * (2 * q.seats + 1) - (allocation.totals[party] || 0);
-  return Math.max(0, Math.round(needed));
+// Hare-Niemeyer-Aequivalent zur alten Sainte-Laguë-"votesToNextSeat()":
+// KEINE Stimmenprognose mehr, nur noch der Restanteil-Abstand zur Schwelle.
+// Grund: bei Sainte-Laguë hing der Quotient einer Partei nur von ihren
+// eigenen Stimmen und ihrem eigenen Sitzstand ab (unabhaengig von anderen
+// Parteien) - "X Stimmen mehr" liess sich daraus sauber ausrechnen. Bei
+// Hare-Niemeyer haengt der Restanteil jeder Partei von der Gesamtstimmenzahl
+// ALLER Parteien gemeinsam ab, und die Zuteilung ist nicht monoton
+// (Alabama-Paradoxon, siehe Datei-Kommentar oben). Eine "in N Stimmen kippt
+// der Sitz"-Zahl waere hier keine Naeherung, sondern schlicht falsch
+// begruendet - deshalb bewusst nicht implementiert. Was mathematisch
+// sinnvoll bleibt: wie nah der Restanteil einer Partei an der Schwelle
+// (remainderCutoff) liegt, in Prozentpunkten Restanteil.
+function remainderGap(allocation, party) {
+  const info = allocation.remainders[party];
+  if (!info) return null;
+  if (allocation.remainderCutoff === null) return { remainder: info.remainder, cutoff: null, gapPct: null };
+  const gapPct = (info.remainder - allocation.remainderCutoff) * 100;
+  return { remainder: info.remainder, cutoff: allocation.remainderCutoff, gapPct };
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = {
+    hareNiemeyer,
+    sumSecondVotes,
+    getConstituencyWinners,
+    allocateParliament,
+    applySwing,
+    buildScenario,
+    simulate,
+    computeLandShares,
+    applyUniformSwing,
+    buildCurrentBaseline,
+    recommendDirectMandateAgainst,
+    simulateSecondVoteOnly,
+    recommendSecondVoteAgainst,
+    remainderGap,
+  };
 }

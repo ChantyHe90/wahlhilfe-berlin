@@ -1,219 +1,420 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Wahlkreis-Sitzsimulator (PoC)</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Der Bogen — Wahlkreis-Sitzsimulator (PoC)</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,440;0,9..144,600;0,9..144,700;1,9..144,500&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <p class="eyebrow">Berlin · Wahl 2026</p>
+      <h1 class="cover-headline">
+        Welche Stimme<br />macht einen<br />Unterschied?
+      </h1>
+      <p class="cover-sub">
+        Wenn dein Ziel ist, AfD-Sitze möglichst zu vermeiden.
+      </p>
 
-<header>
-  <div class="header-row">
-    <h1>Wie wähle ich strategisch?</h1>
-    <button type="button" id="explainToggle" class="icon-toggle" aria-pressed="false" title="Wie funktioniert die Berechnung?">
-      <span aria-hidden="true">❓</span> Warum ist das strategisch?
-    </button>
-  </div>
-  <p class="subtitle">Berlin-Wahl 20.09.2026 &middot; Ziel: möglichst wenige AfD-Sitze im Abgeordnetenhaus</p>
-  <p class="hint">
-    <strong>Weißer Stimmzettel</strong> = Abgeordnetenhaus (Landesparlament, Erst- + Zweitstimme zusammen) &mdash; darum geht's hier.
-    <strong>Oranger Stimmzettel</strong> = BVV (Bezirk) &mdash; hier nicht abgebildet.
-  </p>
-</header>
-
-<main>
-
-  <section class="card">
-    <div class="row">
-      <input id="plzInput" type="text" placeholder="Deine PLZ, z.B. 10115" maxlength="5">
-      <button id="plzButton">Los</button>
-    </div>
-    <div class="row" id="wahlkreisRow" hidden>
-      <label>
-        Dein Wahlkreis
-        <select id="wahlkreisSelect"></select>
-      </label>
-    </div>
-    <p id="plzHint" class="hint"></p>
-  </section>
-
-  <section class="card reco-card" id="resultSection" hidden>
-    <h2 id="constituencyName"></h2>
-
-    <div class="reco-grid">
-      <div class="reco-block">
-        <div class="reco-icon" aria-hidden="true">🗳️</div>
-        <div class="reco-label">Deine Erststimme</div>
-        <div class="reco-party" id="firstRecoParty">–</div>
-        <p class="reco-text" id="firstRecoText"></p>
+      <div class="row hero-row">
+        <input
+          id="plzInput"
+          type="text"
+          placeholder="Deine PLZ, z. B. 10115"
+          inputmode="numeric"
+          maxlength="5"
+        />
+        <button id="plzButton" class="btn-mark" aria-label="Los">→</button>
       </div>
-      <div class="reco-block">
-        <div class="reco-icon" aria-hidden="true">📋</div>
-        <div class="reco-label">Deine Zweitstimme</div>
-        <div class="reco-party" id="secondRecoParty">–</div>
-        <p class="reco-text" id="secondRecoText"></p>
+      <div class="row" id="wahlkreisRow" hidden>
+        <label>
+          Dein Wahlkreis
+          <select id="wahlkreisSelect"></select>
+        </label>
       </div>
-    </div>
+      <p id="plzHint" class="hint"></p>
 
-    <div class="effect-box" id="effectBox">
-      <div class="effect-label">Voraussichtlicher Effekt auf AfD-Sitze in unserem Modell</div>
-      <div class="effect-numbers" id="effectNumbers"></div>
-      <p class="effect-note" id="effectNote"></p>
-    </div>
+      <p class="hint mono-hint">dauert ~10 sekunden</p>
+    </header>
 
-    <div class="baseline-scenario-row">
-      <div class="bs-col">
-        <div class="bs-label" id="bsBaselineLabel">Aktuelle Prognose</div>
-        <div class="bs-value" id="bsBaselineValue"></div>
-      </div>
-      <div class="bs-arrow" aria-hidden="true">→</div>
-      <div class="bs-col">
-        <div class="bs-label">Simuliertes Szenario</div>
-        <div class="bs-value" id="bsScenarioValue"></div>
-      </div>
-    </div>
-    <p class="hint bs-caption">Die Prognose ist eine echte Umfrage. Das Szenario ist keine Vorhersage, sondern eine Modellrechnung: „was wäre, wenn …“.</p>
-  </section>
+    <main>
+      <!-- SCREEN 2: Erststimme (Kiez) vs. Zweitstimme (Berlin) -->
+      <section class="screen" id="resultSection" hidden>
+        <p class="eyebrow constituency-eyebrow">
+          <span id="constituencyName"></span>
+        </p>
 
-  <section class="card detail-only" id="detailSection" hidden>
-    <h2>Wie kommt die Empfehlung zustande?</h2>
+        <div class="vote-metaphor">
+          <div class="vote-block vote-block--local">
+            <p class="vote-eyebrow">01 — Dein Kiez</p>
+            <h3 class="vote-headline">Erst-<br />stimme</h3>
+            <p class="vote-party" id="firstRecoParty">–</p>
+            <p class="vote-desc" id="firstRecoText"></p>
+          </div>
 
-    <div class="toggle-group">
-      <button type="button" id="basis2023Button" class="toggle-button">2023 (amtlich)</button>
-      <button type="button" id="basisAktuellButton" class="toggle-button active">Aktuell (Umfrage)</button>
-    </div>
-    <div id="basisInfo" class="basis-info"></div>
+          <div class="vote-connector" aria-hidden="true"></div>
 
-    <div class="explain-box">
-      <strong>Baustein 1 &mdash; Erststimme: Wer gewinnt hier vor Ort?</strong> In deinem Wahlkreis treten
-      Personen gegeneinander an. Wer die meisten Erststimmen bekommt, gewinnt &mdash; es reicht mehr als alle
-      anderen, keine 50% nötig. Beispiel: CDU 12.000, SPD 10.000, Grüne 8.000 &rarr; CDU gewinnt den
-      Wahlkreis (Direktmandat), auch ohne Mehrheit.
-      <br><br>
-      <strong>Baustein 2 &mdash; Zweitstimme: Wie stark soll jede Partei insgesamt sein?</strong> Die
-      Zweitstimme zählt berlinweit und bestimmt, wie viele Sitze jede Partei im ganzen Parlament bekommt
-      (über die Bezirksliste). Wie aus Stimmenanteilen ganze Sitze werden, erklärt Sainte-Laguë weiter unten.
-    </div>
+          <div class="vote-block vote-block--land breakout">
+            <div class="vote-block-inner">
+              <p class="vote-eyebrow">02 — Ganz Berlin</p>
+              <h3 class="vote-headline">Zweit-<br />stimme</h3>
+              <p class="vote-party" id="secondRecoParty">–</p>
+              <p class="vote-desc" id="secondRecoText"></p>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <div class="split">
-      <div>
-        <h4 id="firstVoteLabel">Erststimme (Direktkandidat:in)</h4>
-        <div id="firstVoteBaseline" class="bars"></div>
-      </div>
-      <div>
-        <h4 id="secondVoteLabel">Zweitstimme (Partei)</h4>
-        <div id="secondVoteBaseline" class="bars"></div>
-      </div>
-    </div>
+      <!-- SCREEN 3: der Effekt, Hero-Moment -->
+      <section class="screen effect-band breakout" id="effectSection" hidden>
+        <div class="effect-band-inner">
+          <p class="eyebrow">Das verändert dein Modell</p>
+          <div class="effect-hero">
+            <p class="effect-hero-label">AfD-Sitze</p>
+            <div class="effect-hero-number">
+              <span id="effectFrom">–</span>
+              <span class="bogen" aria-hidden="true">&rarr;</span>
+              <span id="effectTo">–</span>
+            </div>
+            <p class="effect-hero-delta" id="effectDelta"></p>
+          </div>
+          <div class="effect-compare-bar" aria-hidden="true">
+            <div class="compare-track">
+              <div
+                class="compare-fill compare-fill--baseline"
+                id="compareFillBaseline"
+              ></div>
+            </div>
+            <div class="compare-track">
+              <div
+                class="compare-fill compare-fill--scenario"
+                id="compareFillScenario"
+              ></div>
+            </div>
+          </div>
+          <p class="hint mono-hint effect-source" id="effectNote"></p>
+        </div>
+      </section>
 
-    <h3>Wie knapp ist der nächste Sitz?</h3>
-    <p class="hint">
-      Sainte-Laguë vergibt Sitze reihum an die Partei mit dem höchsten Quotienten. Wie weit eine Partei vom
-      nächsten Sitz entfernt ist, lässt sich daraus ungefähr in Stimmen umrechnen &mdash; das ist keine exakte
-      Prognose, sondern zeigt nur, wie wackelig ein Sitz gerade ist.
-    </p>
-    <div id="marginExplain" class="explain-box"></div>
+      <!-- SCREEN 4: fertig oder weiter -->
+      <section class="screen cta-screen" id="ctaSection" hidden>
+        <div class="rule"></div>
+        <p class="cta-done">
+          Das reicht dir? <span aria-hidden="true">✓</span>
+        </p>
+        <button type="button" id="nerdToggle" class="text-link nerd-cta">
+          Nope– Ich will mehr wissen! →
+        </button>
+      </section>
 
-    <h3>Szenario selbst verändern</h3>
-    <p class="hint">
-      <strong>Wichtig:</strong> Eine einzelne Stimme verändert das Berliner Ergebnis nicht messbar. Diese
-      Simulation testet stattdessen ein Szenario: <em>Wie sähe die Sitzverteilung aus, wenn eine gewählte
-      Partei berlinweit stärker abschneidet?</em> Das zeigt die Richtung eines Effekts, nicht die Wirkung
-      deiner persönlichen Stimme.
-    </p>
-    <div class="explain-box">
-      <strong>Was heißt "Prozentpunkte"?</strong> Steht eine Partei bei 17% und der Regler auf +3, landet sie
-      im Szenario bei ungefähr 20% &mdash; <em>Punkte</em>, nicht Prozent (von 17 auf 20 sind +3 Prozentpunkte,
-      aber +18% relativ). Diese Punkte kommen proportional von allen anderen Parteien: eine Partei mit 30%
-      verliert dabei mehr Stimmen als eine mit 5%, die Gesamtsumme bleibt gleich.
-      <br><br>
-      Das ist etwas anderes als die "Aktuell (Umfrage)"-Basis oben: die überträgt eine echte, bereits
-      gemessene Umfrage-Veränderung gleichmäßig auf alle Wahlkreise. Diese Szenario-Verschiebung hier ist rein
-      hypothetisch &mdash; du bestimmst sie selbst.
-    </div>
+      <!-- DEEP DIVE: editorial Kapitelregister statt Settings-Akkordeon -->
+      <section id="nerdSection" hidden>
+        <p class="eyebrow deep-dive-eyebrow">— Show me the receipts —</p>
+        <h2 class="nerd-title">Genauer hinsehen</h2>
 
-    <div class="row">
-      <label>
-        Erststimme testweise an
-        <select id="firstVoteSelect"></select>
-      </label>
-      <label>
-        Zweitstimme testweise an
-        <select id="secondVoteSelect"></select>
-      </label>
-    </div>
-    <div class="row swing-row">
-      <label class="swing-label">
-        Verschiebung: <strong><span id="swingValue">3</span> Prozentpunkte</strong>
-        <input type="range" id="swingSlider" min="1" max="10" step="1" value="3">
-      </label>
-      <div class="swing-presets">
-        <button type="button" class="preset-button" data-swing="1">+1 Pp.</button>
-        <button type="button" class="preset-button active" data-swing="3">+3 Pp.</button>
-        <button type="button" class="preset-button" data-swing="5">+5 Pp.</button>
-        <button type="button" class="preset-button" data-swing="10">+10 Pp.</button>
-      </div>
-    </div>
-    <button id="simulateButton"><span id="simulateButtonLabel">Szenario neu berechnen</span></button>
-  </section>
+        <nav class="nerd-index" aria-label="Kapitel">
+          <button type="button" data-target="nerd-quelle">
+            <span class="ix-num">I</span> Sonntagsfrage &amp; Quelle
+          </button>
+          <button type="button" data-target="nerd-erst">
+            <span class="ix-num">II</span> Warum diese Erststimme?
+          </button>
+          <button type="button" data-target="nerd-zweit">
+            <span class="ix-num">III</span> Warum diese Zweitstimme?
+          </button>
+          <button type="button" data-target="nerd-restsitz">
+            <span class="ix-num">IV</span> Wie knapp war der letzte Sitz?
+          </button>
+          <button type="button" data-target="nerd-scenario">
+            <span class="ix-num">V</span> Szenario selbst testen
+          </button>
+          <button type="button" data-target="nerd-sicher">
+            <span class="ix-num">VI</span> Wie sicher ist das?
+          </button>
+          <button type="button" data-target="nerd-architektur">
+            <span class="ix-num">VII</span> Wie funktioniert die App?
+          </button>
+        </nav>
 
-  <section class="card detail-only" id="simSection" hidden>
-    <h2>Ergebnis des Szenarios (Detail)</h2>
-    <div class="explain-box">
-      <strong>Wie aus Stimmenanteilen Sitze werden (Sainte-Laguë):</strong> Jede Partei unter 5% der
-      Zweitstimmen fliegt komplett raus (5%-Hürde) &mdash; ihre Stimmen zählen für die Sitzverteilung nicht
-      mehr mit, auch nicht anteilig. Von den restlichen Parteien bekommt reihum die mit dem höchsten
-      Quotienten (Stimmen ÷ (2 × bisherige Sitze + 1)) den nächsten Sitz, bis alle Sitze vergeben sind. Je
-      mehr Sitze eine Partei schon hat, desto kleiner wird ihr Quotient &mdash; dadurch pendelt sich die
-      Verteilung nah an den Stimmenanteilen ein.
-      <br><br>
-      <strong>Überhang- und Ausgleichsmandate:</strong> Gewinnt eine Partei mehr Wahlkreise (Direktmandate)
-      als ihr nach der Zweitstimme eigentlich zustehen, darf sie die trotzdem behalten (Überhang) &mdash;
-      direkt gewählten Personen kann man das Mandat nicht wegnehmen. Damit die Sitzverteilung insgesamt
-      wieder ungefähr proportional ist, wächst das ganze Parlament, bis es wieder passt (Ausgleichsmandate).
-      Start ist 130 Sitze, am Ende können es mehr sein &mdash; <strong>das allein kann Sitzzahlen einzelner
-      Parteien verschieben</strong>, auch ohne dass sich ihr Stimmenanteil ändert.
-      <br><br>
-      <strong>Warum ändert sich manchmal nur eine Partei, manchmal mehrere?</strong> Der zuletzt vergebene
-      Sitz geht immer an den knapp höchsten Quotienten &mdash; das ist die "Schwelle". Verschiebst du Stimmen,
-      ändern sich alle Quotienten ein bisschen, aber kippen tut nur ein Sitz, der ohnehin schon knapp an der
-      Schwelle lag. Eine Partei mit deutlichem Abstand zur Schwelle merkt von der Verschiebung nichts, egal
-      wie viele Punkte du verschiebst. Unten siehst du nach dem Durchrechnen, wer bei diesem Ergebnis an der
-      Schwelle lag.
-    </div>
-    <div class="split">
-      <div>
-        <h4 id="baselineSeatsLabel">Basis (aktuell)</h4>
-        <div id="baselineSeats" class="bars"></div>
-      </div>
-      <div>
-        <h4>Szenario (Testrechnung)</h4>
-        <div id="scenarioSeats" class="bars"></div>
-      </div>
-    </div>
-    <table id="deltaTable">
-      <thead><tr><th>Partei</th><th>Basis</th><th>Szenario</th><th>Delta</th></tr></thead>
-      <tbody></tbody>
-    </table>
-    <p id="afdCallout" class="afd-callout"></p>
-    <div id="quotientExplain" class="explain-box"></div>
-  </section>
+        <div class="chapters">
+          <details class="nerd-item" id="nerd-quelle">
+            <summary>Sonntagsfrage &amp; Quelle</summary>
+            <div class="nerd-body">
+              <div class="toggle-group">
+                <button
+                  type="button"
+                  id="basis2023Button"
+                  class="toggle-button"
+                >
+                  2023 (amtlich)
+                </button>
+                <span class="toggle-sep" aria-hidden="true">/</span>
+                <button
+                  type="button"
+                  id="basisAktuellButton"
+                  class="toggle-button active"
+                >
+                  Aktuell (Umfrage)
+                </button>
+              </div>
+              <div id="basisInfo" class="basis-info"></div>
+            </div>
+          </details>
 
-  <section class="card detail-only" id="modelLimitsSection">
-    <strong>Grenzen dieses Modells:</strong>
-    <ul>
-      <li>Nur 6 Parteien erfasst (SPD, CDU, Grüne, Linke, AfD, FDP) &mdash; Prozentwerte beziehen sich nur auf diese.</li>
-      <li>Direktmandate gehen im Modell nur an Parteien über 5% Landesstimmen (keine Grundmandatsklausel).</li>
-      <li>PLZ wird auf Bezirksebene zugeordnet, nicht exakt auf den Wahlkreis.</li>
-      <li>Die "Aktuell"-Basis ist eine landesweite Umfrage, gleichmäßig auf Wahlkreise projiziert &mdash; keine echte Wahlkreis-Umfrage.</li>
-      <li>Die Szenario-Verschiebung ist eine hypothetische Testrechnung für eine ganze Partei, nicht die Wirkung deiner einzelnen Stimme.</li>
-    </ul>
-  </section>
+          <details class="nerd-item" id="nerd-erst">
+            <summary>
+              Warum <span id="nerdFirstPartyName">diese</span> Erststimme?
+            </summary>
+            <div class="nerd-body">
+              <p class="hint">
+                In deinem Wahlkreis gewinnt, wer die meisten Erststimmen bekommt
+                &mdash; keine 50% nötig.
+              </p>
+              <h4 id="firstVoteLabel">Erststimme (Direktkandidat:in)</h4>
+              <div id="firstVoteBaseline" class="bars"></div>
+            </div>
+          </details>
 
-  <section class="card detail-only" id="architectureSection" hidden>
-    <h2>Wie die App funktioniert</h2>
-    <pre class="arch-diagram">PLZ eingeben
+          <details class="nerd-item" id="nerd-zweit">
+            <summary>
+              Warum <span id="nerdSecondPartyName">diese</span> Zweitstimme?
+            </summary>
+            <div class="nerd-body">
+              <p class="hint">
+                Die Zweitstimme zählt berlinweit und bestimmt, wie viele Sitze
+                jede Partei im Parlament bekommt (Hare-Niemeyer-Verfahren, das
+                echte Sitzverteilungsverfahren fürs Berliner Abgeordnetenhaus).
+              </p>
+              <h4 id="secondVoteLabel">Zweitstimme (Partei)</h4>
+              <div id="secondVoteBaseline" class="bars"></div>
+              <p id="noLocalDataNote" class="hint" hidden></p>
+            </div>
+          </details>
+
+          <details class="nerd-item" id="nerd-restsitz">
+            <summary>Wie knapp war der letzte Sitz?</summary>
+            <div class="nerd-body">
+              <p class="hint">
+                Hare-Niemeyer vergibt die Restsitze an die Parteien mit dem
+                höchsten Restanteil (Nachkommastellen der Sitzquote). Wie nah
+                eine Partei an dieser Schwelle lag, lässt sich als Abstand in
+                Prozentpunkten Restanteil zeigen &mdash;
+                <strong>keine</strong> Stimmenprognose: bei Hare-Niemeyer hängt
+                der Restanteil jeder Partei von den Stimmen aller anderen
+                Parteien mit ab.
+              </p>
+              <div id="marginExplain" class="explain-box"></div>
+            </div>
+          </details>
+
+          <details class="nerd-item" id="nerd-scenario">
+            <summary>Szenario selbst testen</summary>
+            <div class="nerd-body">
+              <p class="hint">
+                <strong>Wichtig:</strong> Eine einzelne Stimme verändert das
+                Berliner Ergebnis nicht messbar. Diese Simulation testet ein
+                Szenario:
+                <em
+                  >Wie sähe die Sitzverteilung aus, wenn eine gewählte Partei
+                  berlinweit stärker abschneidet?</em
+                >
+              </p>
+              <div class="explain-box">
+                <strong>Was heißt "Prozentpunkte"?</strong> Steht eine Partei
+                bei 17% und der Regler auf +3, landet sie im Szenario bei
+                ungefähr 20% &mdash; <em>Punkte</em>, nicht Prozent. Diese
+                Punkte kommen proportional von allen anderen Parteien, die
+                Gesamtsumme bleibt gleich. Anders als die "Aktuell
+                (Umfrage)"-Basis oben (echte, gemessene Umfrage): diese
+                Verschiebung ist rein hypothetisch, du bestimmst sie selbst.
+              </div>
+
+              <div class="row">
+                <label>
+                  Erststimme testweise an
+                  <select id="firstVoteSelect"></select>
+                </label>
+                <label>
+                  Zweitstimme testweise an
+                  <select id="secondVoteSelect"></select>
+                </label>
+              </div>
+              <div class="row swing-row">
+                <label class="swing-label">
+                  Verschiebung:
+                  <strong><span id="swingValue">3</span> Prozentpunkte</strong>
+                  <input
+                    type="range"
+                    id="swingSlider"
+                    min="1"
+                    max="10"
+                    step="1"
+                    value="3"
+                  />
+                </label>
+                <div class="swing-presets">
+                  <button type="button" class="preset-button" data-swing="1">
+                    +1 Pp.
+                  </button>
+                  <button
+                    type="button"
+                    class="preset-button active"
+                    data-swing="3"
+                  >
+                    +3 Pp.
+                  </button>
+                  <button type="button" class="preset-button" data-swing="5">
+                    +5 Pp.
+                  </button>
+                  <button type="button" class="preset-button" data-swing="10">
+                    +10 Pp.
+                  </button>
+                </div>
+              </div>
+              <button id="simulateButton" class="btn-primary">
+                <span id="simulateButtonLabel">Szenario berechnen</span>
+              </button>
+
+              <div class="nerd-body scenario-result" id="nerdSimResult" hidden>
+                <div class="rule rule--tight"></div>
+                <p class="eyebrow">Ergebnis deines Szenarios</p>
+                <div class="explain-box">
+                  <strong
+                    >Wie aus Stimmenanteilen Sitze werden
+                    (Hare-Niemeyer):</strong
+                  >
+                  Jede Partei unter 5% der Zweitstimmen fliegt komplett raus
+                  (5%-Hürde). Von den restlichen Parteien bekommt jede zunächst
+                  so viele Sitze, wie in ihre Quote (Sitze insgesamt ×
+                  Stimmenanteil) ganzzahlig reinpassen (abgerundet). Die übrigen
+                  Sitze gehen an die Parteien mit den höchsten Nachkommastellen
+                  dieser Quote (Restanteil). <br /><br />
+                  <strong>Direktmandat und 5%-Hürde sind getrennt:</strong> Wer
+                  im Wahlkreis die meisten Erststimmen hat, gewinnt das
+                  Direktmandat &mdash; unabhängig davon, ob die eigene Partei
+                  landesweit über oder unter 5% liegt. Gewinnt eine Partei unter
+                  5% trotzdem einen Wahlkreis, bekommt sie in diesem Modell
+                  genau diesen einen Sitz obendrauf, aber keine weiteren Sitze
+                  aus der Zweitstimmen-Rechnung &mdash; eine bewusste
+                  Modellgrenze. <br /><br />
+                  <strong>Überhang- und Ausgleichsmandate:</strong> Gewinnt eine
+                  (hürdenberechtigte) Partei mehr Wahlkreise als ihr nach der
+                  Zweitstimme zustehen, behält sie die (Überhang). Damit die
+                  Sitzverteilung wieder ungefähr proportional ist, wächst das
+                  ganze Parlament, bis es passt (Ausgleichsmandate). Start 130
+                  Sitze, am Ende können es mehr sein &mdash; diese App bildet
+                  nur die simple "hochzählen, bis es passt"-Version nach, nicht
+                  das echte Berliner Verfahren mit Bezirks- und Landesliste.
+                  <br /><br />
+                  <strong
+                    >Warum ändert sich manchmal nur eine Partei, manchmal
+                    mehrere?</strong
+                  >
+                  Der zuletzt vergebene Restsitz geht an den knapp höchsten
+                  Restanteil &mdash; die "Schwelle". Nicht garantiert monoton:
+                  mehr Gesamtsitze können einer Partei in seltenen Fällen sogar
+                  einen Sitz kosten (Alabama-Paradoxon, Eigenschaft des echten
+                  Verfahrens, keine Rechenmacke dieser App).
+                </div>
+                <div class="split">
+                  <div>
+                    <h4 id="baselineSeatsLabel">Basis (aktuell)</h4>
+                    <div id="baselineSeats" class="bars"></div>
+                  </div>
+                  <div>
+                    <h4>Szenario (Testrechnung)</h4>
+                    <div id="scenarioSeats" class="bars"></div>
+                  </div>
+                </div>
+                <div class="chip-row" id="deltaChips"></div>
+                <button
+                  type="button"
+                  id="tableToggle"
+                  class="text-link table-toggle"
+                >
+                  Als Tabelle anzeigen
+                </button>
+                <table id="deltaTable" hidden>
+                  <thead>
+                    <tr>
+                      <th>Partei</th>
+                      <th>Basis</th>
+                      <th>Szenario</th>
+                      <th>Delta</th>
+                    </tr>
+                  </thead>
+                  <tbody></tbody>
+                </table>
+                <p id="afdCallout" class="afd-callout"></p>
+                <div id="remainderExplain" class="explain-box"></div>
+              </div>
+            </div>
+          </details>
+
+          <details class="nerd-item" id="nerd-sicher">
+            <summary>Wie sicher ist das?</summary>
+            <div class="nerd-body">
+              <ul class="limits-list">
+                <li>
+                  7 Parteien erfasst (SPD, CDU, Grüne, Linke, AfD, FDP, BSW)
+                  &mdash; Prozentwerte beziehen sich nur auf diese.
+                </li>
+                <li>
+                  BSW hat keine echten 2023-Wahlkreisdaten (Partei existierte
+                  damals nicht) &mdash; fließt nur in die landesweite
+                  Zweitstimmen-/Sitzberechnung ein, nicht in die Wahlkreis-Karte
+                  oder Erststimmen-Empfehlung.
+                </li>
+                <li>
+                  Direktmandate sind von der 5%-Hürde unabhängig (wie im echten
+                  Wahlrecht): eine Partei unter 5% kann im Modell theoretisch
+                  einen Wahlkreis gewinnen und behält diesen einen Sitz, bekommt
+                  aber keine Sitze aus der Zweitstimmen-Rechnung (keine
+                  Grundmandatsklausel für die Landesliste).
+                </li>
+                <li>
+                  Ausgleichsmandate sind stark vereinfacht: Sitzzahl wird nur so
+                  lange hochgezählt, bis jede hürdenberechtigte Partei ihre
+                  Direktmandate abdeckt &mdash; kein echtes Berliner Verfahren
+                  mit Bezirks- und Landesliste.
+                </li>
+                <li>
+                  PLZ wird auf Bezirksebene zugeordnet, nicht exakt auf den
+                  Wahlkreis.
+                </li>
+                <li>
+                  Die "Aktuell"-Basis ist eine landesweite Umfrage, gleichmäßig
+                  auf Wahlkreise projiziert &mdash; keine echte
+                  Wahlkreis-Umfrage. Der BSW-Umfragewert ist zusätzlich ein
+                  Platzhalter (siehe data.js), noch nicht durch eine echte
+                  Quelle belegt.
+                </li>
+                <li>
+                  Die Szenario-Verschiebung ist eine hypothetische Testrechnung
+                  für eine ganze Partei, nicht die Wirkung deiner einzelnen
+                  Stimme.
+                </li>
+                <li>
+                  <strong>Weißer Stimmzettel</strong> = Abgeordnetenhaus
+                  (Landesparlament, Erst- + Zweitstimme zusammen) &mdash; darum
+                  geht's hier. <strong>Oranger Stimmzettel</strong> = BVV
+                  (Bezirk) &mdash; hier nicht abgebildet.
+                </li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="nerd-item" id="nerd-architektur">
+            <summary>Wie funktioniert die App?</summary>
+            <div class="nerd-body">
+              <pre class="arch-diagram">
+PLZ eingeben
   │
   ▼
 Bezirk erkannt (PLZ → Bezirk, data.js: BEZIRKE)
@@ -230,36 +431,70 @@ Zweitstimme: Partei mit größtem AfD-Sitz-Effekt im Szenario
 (engine.js: recommendSecondVoteAgainst, testet alle Parteien)
   │
   ▼
-engine.js: Sainte-Laguë + 5%-Hürde + Szenario-Verschiebung (Regler)
+engine.js: Hare-Niemeyer + 5%-Hürde + Szenario-Verschiebung (Regler)
   │
   ▼
-Basis-Sitze vs. Szenario-Sitze → AfD-Effekt + Delta-Tabelle + Warum-Erklärung</pre>
-    <table class="arch-files">
-      <tbody>
-        <tr><td><code>data.js</code></td><td>Parteien, Bezirke (PLZ-Listen), 78 Wahlkreise mit echten 2023-Stimmen, aktueller Wahltrend (CURRENT_POLL). Reine Daten, keine Logik.</td></tr>
-        <tr><td><code>engine.js</code></td><td>Sitzberechnung (Sainte-Laguë, 5%-Hürde, vereinfachter Ausgleich), Umfrage-Verschiebung (Uniform Swing), Szenario-Verschiebung, sowie die Empfehlungs-Funktionen (kennen nur PartyIds, keine Namen).</td></tr>
-        <tr><td><code>app.js</code></td><td>Verbindet data.js + engine.js mit der Seite: PLZ-Lookup, automatische Empfehlung, Detail-Modus, Rendering.</td></tr>
-        <tr><td><code>index.html</code> / <code>style.css</code></td><td>Struktur und Styling. Kein Framework, kein Build-Schritt, kein Backend.</td></tr>
-      </tbody>
-    </table>
-  </section>
+Basis-Sitze vs. Szenario-Sitze → AfD-Effekt + Delta-Chips + Warum-Erklärung</pre
+              >
+              <table class="arch-files">
+                <tbody>
+                  <tr>
+                    <td><code>data.js</code></td>
+                    <td>
+                      Parteien (inkl. BSW), Bezirke (PLZ-Listen), 78 Wahlkreise
+                      mit echten 2023-Stimmen, aktueller Wahltrend
+                      (CURRENT_POLL, BSW-Wert ist Platzhalter). Reine Daten,
+                      keine Logik.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>engine.js</code></td>
+                    <td>
+                      Sitzberechnung (Hare-Niemeyer, 5%-Hürde, vereinfachter
+                      Ausgleich), Umfrage-Verschiebung (Uniform Swing),
+                      Szenario-Verschiebung, sowie die Empfehlungs-Funktionen
+                      (kennen nur PartyIds, keine Namen).
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>app.js</code></td>
+                    <td>
+                      Verbindet data.js + engine.js mit der Seite: PLZ-Lookup,
+                      automatische Empfehlung, Deep Dive, Rendering.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>index.html</code> / <code>style.css</code></td>
+                    <td>
+                      Struktur und Styling. Kein Framework, kein Build-Schritt,
+                      kein Backend.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+        </div>
+      </section>
+    </main>
 
-</main>
+    <footer>
+      <p>
+        Keine Wahlempfehlung, nur eine Modellrechnung: echte Ergebnisse 2023
+        (Landeswahlleiterin Berlin), optional verschoben auf den aktuellen
+        Berlin-Wahltrend (dawum.de, gleichmäßig auf alle Wahlkreise übertragen).
+        Die Szenario-Funktion simuliert <em>nicht</em> deine einzelne Stimme,
+        sondern die Frage "was wäre, wenn eine Partei berlinweit stärker
+        abschneidet". Wahlrecht stark vereinfacht (u. a. keine
+        Grundmandatsklausel, echte Bezirkslisten-Mechanik nur angenähert).
+        PLZ-Zuordnung: Berlin-PLZ überschneiden sich mit Bezirksgrenzen, darum
+        wählst du deinen Wahlkreis aus einer kurzen Liste statt automatisch
+        exakt zugeordnet zu werden.
+      </p>
+    </footer>
 
-<footer>
-  <p>
-    Keine Wahlempfehlung, nur eine Modellrechnung: echte Ergebnisse 2023 (Landeswahlleiterin Berlin), optional
-    verschoben auf den aktuellen Berlin-Wahltrend (dawum.de, gleichmäßig auf alle Wahlkreise übertragen). Die
-    Szenario-Funktion simuliert <em>nicht</em> deine einzelne Stimme, sondern die Frage "was wäre, wenn eine
-    Partei berlinweit stärker abschneidet". Wahlrecht stark vereinfacht (u.a. keine Grundmandatsklausel, echte
-    Bezirkslisten-Mechanik nur angenähert). PLZ-Zuordnung: Berlin-PLZ überschneiden sich mit Bezirksgrenzen,
-    darum wählst du deinen Wahlkreis aus einer kurzen Liste statt automatisch exakt zugeordnet zu werden.
-  </p>
-  <button id="architectureButton" class="link-button detail-only">Wie funktioniert diese App? (Architektur)</button>
-</footer>
-
-<script src="data.js"></script>
-<script src="engine.js"></script>
-<script src="app.js"></script>
-</body>
+    <script src="data.js"></script>
+    <script src="engine.js"></script>
+    <script src="app.js"></script>
+  </body>
 </html>

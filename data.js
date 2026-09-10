@@ -10,6 +10,12 @@
 // Bezirksgrenzen sind. Die App lässt dich deinen Wahlkreis aus der Liste deines
 // Bezirks wählen, statt ihn (falsch-praezise) automatisch zu bestimmen.
 
+// BSW: keine 2023-Wahlkreisdaten, weil die Partei bei der Wiederholungswahl
+// 12.02.2023 noch nicht existierte (Gruendung erst 2024). Farbe naeherungsweise,
+// keine amtlich verifizierte BSW-Markenfarbe. Siehe engine.js
+// (buildCurrentBaseline-Kommentar) und app.js fuer die Modellgrenze: BSW
+// fliesst nur in die landesweite Zweitstimmen-/Sitzberechnung ein, nicht in
+// eine erfundene lokale Wahlkreis-Verteilung.
 const PARTIES = [
   { id: "spd", name: "SPD", color: "#e3000f" },
   { id: "cdu", name: "CDU", color: "#000000" },
@@ -17,6 +23,7 @@ const PARTIES = [
   { id: "linke", name: "Linke", color: "#be3075" },
   { id: "afd", name: "AfD", color: "#009ee0" },
   { id: "fdp", name: "FDP", color: "#ffed00" },
+  { id: "bsw", name: "BSW", color: "#943872" },
 ];
 
 // Aktueller Berlin-Wahltrend (Durchschnitt mehrerer Institute), keine
@@ -24,10 +31,15 @@ const PARTIES = [
 // 2023er-Wahlkreisdaten angewendet (siehe engine.js: buildCurrentBaseline).
 // Quelle: dawum.de/Berlin/, Wahltrend aus 4 Umfragen im Zeitraum
 // 22.08.–04.09.2026, 6.814 Befragte insgesamt.
+//
+// bsw: PLATZHALTER, nicht Teil der oben genannten Quelle/Erhebung - dawum.de
+// fuehrte BSW zum Stand dieser App-Version nicht separat in der zitierten
+// Aggregation. Bitte vor Produktiveinsatz durch den tatsaechlichen aktuellen
+// dawum.de-Wert ersetzen (oder Institute mit BSW-Ausweis direkt zitieren).
 const CURRENT_POLL = {
   date: "04.09.2026",
   source: "dawum.de Wahltrend (Ø 4 Umfragen, 22.08.–04.09.2026)",
-  shares: { spd: 12.9, cdu: 19.7, gruene: 16.0, linke: 19.7, afd: 18.0, fdp: 3.2 },
+  shares: { spd: 12.9, cdu: 19.7, gruene: 16.0, linke: 19.7, afd: 18.0, fdp: 3.2, bsw: 5.0 },
 };
 
 const BEZIRKE = [
