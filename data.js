@@ -26,19 +26,24 @@ const PARTIES = [
   { id: "bsw", name: "BSW", color: "#943872" },
 ];
 
-// Aktueller Berlin-Wahltrend (Durchschnitt mehrerer Institute), keine
-// Wahlkreis-Ebene - wird als landesweiter "Uniform Swing" auf die
-// 2023er-Wahlkreisdaten angewendet (siehe engine.js: buildCurrentBaseline).
-// Quelle: dawum.de/Berlin/, Wahltrend aus 4 Umfragen im Zeitraum
-// 22.08.–04.09.2026, 6.814 Befragte insgesamt.
+// Statischer Sicherheitsnetz-Datensatz, NICHT die primaere Quelle mehr: die
+// App laedt den aktuellen Berlin-Wahltrend zur Laufzeit live von der
+// DAWUM-API (siehe poll-api.js). FALLBACK_POLL wird nur verwendet, wenn
+// dieser Live-Abruf fehlschlaegt (Netzwerk, unerwartetes Format, fehlende
+// Partei in der Umfrage) - siehe poll-api.js fuer die Fallback-Logik.
+// Deshalb absichtlich nicht "aktuell" im Namen: dieser Datensatz veraltet
+// mit der Zeit, ohne dass das App-Verhalten davon abhaengt.
+//
+// Quelle (Stand dieses Fallback-Snapshots): dawum.de/Berlin/, Wahltrend aus
+// 4 Umfragen im Zeitraum 22.08.–04.09.2026, 6.814 Befragte insgesamt.
 //
 // bsw: PLATZHALTER, nicht Teil der oben genannten Quelle/Erhebung - dawum.de
-// fuehrte BSW zum Stand dieser App-Version nicht separat in der zitierten
-// Aggregation. Bitte vor Produktiveinsatz durch den tatsaechlichen aktuellen
-// dawum.de-Wert ersetzen (oder Institute mit BSW-Ausweis direkt zitieren).
-const CURRENT_POLL = {
+// fuehrte BSW zum Stand dieses Snapshots nicht separat in der zitierten
+// Aggregation. Nur relevant, wenn der Live-Abruf fehlschlaegt.
+const FALLBACK_POLL = {
   date: "04.09.2026",
   source: "dawum.de Wahltrend (Ø 4 Umfragen, 22.08.–04.09.2026)",
+  institute: null,
   shares: { spd: 12.9, cdu: 19.7, gruene: 16.0, linke: 19.7, afd: 18.0, fdp: 3.2, bsw: 5.0 },
 };
 

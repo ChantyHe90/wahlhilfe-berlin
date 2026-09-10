@@ -163,6 +163,7 @@
                   Aktuell (Umfrage)
                 </button>
               </div>
+              <p class="mono-hint" id="pollStatusNote"></p>
               <div id="basisInfo" class="basis-info"></div>
             </div>
           </details>
@@ -453,9 +454,18 @@ Basis-Sitze vs. Szenario-Sitze → AfD-Effekt + Delta-Chips + Warum-Erklärung</
                     <td><code>data.js</code></td>
                     <td>
                       Parteien (inkl. BSW), Bezirke (PLZ-Listen), 78 Wahlkreise
-                      mit echten 2023-Stimmen, aktueller Wahltrend
-                      (CURRENT_POLL, BSW-Wert ist Platzhalter). Reine Daten,
-                      keine Logik.
+                      mit echten 2023-Stimmen, sowie FALLBACK_POLL (statischer
+                      Sicherheitsnetz-Wahltrend, nur falls der Live-Abruf
+                      fehlschlägt). Reine Daten, keine Logik.
+                    </td>
+                  </tr>
+                  <tr>
+                    <td><code>poll-api.js</code></td>
+                    <td>
+                      Lädt beim Seitenaufruf die neueste Berlin-Umfrage live von
+                      der DAWUM-API, ordnet Parteien zu, prüft auf
+                      Vollständigkeit. Bei Fehlern automatisch FALLBACK_POLL.
+                      Reine Netzwerk-/Parsing-Schicht, keine Wahlberechnung.
                     </td>
                   </tr>
                   <tr>
@@ -505,6 +515,7 @@ Basis-Sitze vs. Szenario-Sitze → AfD-Effekt + Delta-Chips + Warum-Erklärung</
     </footer>
 
     <script src="data.js"></script>
+    <script src="poll-api.js"></script>
     <script src="engine.js"></script>
     <script src="app.js"></script>
   </body>

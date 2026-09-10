@@ -5,14 +5,30 @@
 // Reine Rendering-Datei - alle Berechnungen kommen unveraendert aus engine.js.
 
 let scenarioSwingPct = 3;
-const pollShareSum = Object.values(CURRENT_POLL.shares).reduce((a, b) => a + b, 0);
-const normalizedPollShares = Object.fromEntries(
-  Object.entries(CURRENT_POLL.shares).map(([party, pct]) => [party, pct / pollShareSum])
-);
-
-const CURRENT_CONSTITUENCIES = buildCurrentBaseline(CONSTITUENCIES, normalizedPollShares);
-const DATASETS = { "2023": CONSTITUENCIES, aktuell: CURRENT_CONSTITUENCIES };
 let basisMode = "aktuell";
+
+// currentPoll/DATASETS existieren erst, sobald initPoll() fertig ist (siehe
+// unten) - der DAWUM-Live-Abruf ist async. initPoll() startet sofort beim
+// Skriptstart, parallel zur PLZ-Eingabe; jede Stelle, die DATASETS/currentPoll
+// braucht, wartet vorher auf pollReadyPromise (siehe plzButton-Handler).
+let currentPoll = FALLBACK_POLL;
+let CURRENT_CONSTITUENCIES = null;
+let DATASETS = null;
+
+async function initPoll() {
+  const poll = await loadCurrentPoll(); // aus poll-api.js - faellt bei Fehlern selbst schon auf FALLBACK_POLL zurueck
+  currentPoll = poll;
+
+  const pollShareSum = Object.values(poll.shares).reduce((a, b) => a + b, 0);
+  const normalizedPollShares = Object.fromEntries(
+    Object.entries(poll.shares).map(([party, pct]) => [party, pct / pollShareSum])
+  );
+  CURRENT_CONSTITUENCIES = buildCurrentBaseline(CONSTITUENCIES, normalizedPollShares);
+  DATASETS = { "2023": CONSTITUENCIES, aktuell: CURRENT_CONSTITUENCIES };
+
+  renderPollStatus();
+}
+const pollReadyPromise = initPoll();
 
 // Parteien ohne echte 2023-Wahlkreisdaten (aktuell: BSW). Ihr Zweitstimmen-Wert
 // je Wahlkreis in CURRENT_CONSTITUENCIES ist rein aus dem Landes-Umfragewert
@@ -43,8 +59,13 @@ function formatVotes(v) {
 function formatRemainderPct(gapPct) {
   return gapPct === null || gapPct === undefined ? "–" : `${gapPct >= 0 ? "+" : ""}${gapPct.toFixed(1)} Pp.`;
 }
-function withoutNoLocalDataParties(votesObj) {
-  return Object.fromEntries(Object.entries(votesObj).filter(([p]) => !NO_LOCAL_DATA_PARTIES.has(p)));
+// Text fuer das (i)-Icon neben Parteien aus NO_LOCAL_DATA_PARTIES in den
+// Wahlkreis-Balken (siehe renderBars: options.infoNote). Erklaert direkt am
+// Balken, statt die Partei stillschweigend rauszufiltern - Zahl bleibt
+// sichtbar, aber klar als landesweit hochgerechnet markiert.
+function noLocalDataInfoNote(partyId) {
+  if (!NO_LOCAL_DATA_PARTIES.has(partyId)) return null;
+  return `Keine echten 2023-Wahlkreisdaten für ${partyName(partyId)} (Partei existierte damals nicht) - Wert ist landesweit hochgerechnet, nicht wahlkreisscharf.`;
 }
 
 // Zahl zaehlt von ihrem aktuellen Anzeigewert weich zum neuen Wert hoch/runter
@@ -95,6 +116,17 @@ function renderBars(container, votesObj, options = {}) {
     const label = document.createElement("span");
     label.className = "bar-label";
     label.textContent = partyName(party);
+
+    const note = options.infoNote && options.infoNote(party);
+    if (note) {
+      const icon = document.createElement("span");
+      icon.className = "info-icon";
+      icon.textContent = "ⓘ";
+      icon.title = note;
+      icon.setAttribute("aria-label", note);
+      icon.tabIndex = 0;
+      label.appendChild(icon);
+    }
 
     const track = document.createElement("div");
     track.className = "bar-track";
@@ -165,6 +197,7 @@ const nerdSimResult = document.getElementById("nerdSimResult");
 const basis2023Button = document.getElementById("basis2023Button");
 const basisAktuellButton = document.getElementById("basisAktuellButton");
 const basisInfo = document.getElementById("basisInfo");
+const pollStatusNote = document.getElementById("pollStatusNote");
 const simulateButtonLabel = document.getElementById("simulateButtonLabel");
 const firstVoteLabel = document.getElementById("firstVoteLabel");
 const secondVoteLabel = document.getElementById("secondVoteLabel");
@@ -199,7 +232,7 @@ document.querySelectorAll(".nerd-item").forEach((details) => {
 fillPartySelect(firstVoteSelect, new Set(["afd"]));
 fillPartySelect(secondVoteSelect, new Set(["afd"]));
 
-plzButton.addEventListener("click", () => {
+plzButton.addEventListener("click", async () => {
   const plz = plzInput.value.trim();
   resultSection.hidden = true;
   effectSection.hidden = true;
@@ -235,7 +268,15 @@ plzButton.addEventListener("click", () => {
       ? `Deine PLZ liegt an der Grenze mehrerer Bezirke (${bezirke.map((b) => b.name).join(", ")}). Wähle deinen Wahlkreis.`
       : "Wähle deinen Wahlkreis.";
   wahlkreisRow.hidden = false;
-  showConstituency(wahlkreisSelect.value);
+
+  // In der Regel schon laengst aufgeloest (initPoll laeuft parallel seit
+  // Skriptstart) - der kurze Loading-State faengt nur den seltenen Fall
+  // langsamer/fehlender Netzwerkverbindung ab.
+  plzButton.classList.add("is-loading");
+  plzButton.disabled = true;
+  await showConstituency(wahlkreisSelect.value);
+  plzButton.classList.remove("is-loading");
+  plzButton.disabled = false;
 });
 
 wahlkreisSelect.addEventListener("change", () => {
@@ -244,23 +285,37 @@ wahlkreisSelect.addEventListener("change", () => {
 
 
 function pollShareList() {
-  return Object.entries(CURRENT_POLL.shares)
+  return Object.entries(currentPoll.shares)
     .sort((a, b) => b[1] - a[1])
     .map(([party, pct]) => `${partyName(party)} ${pct.toFixed(1)} %`)
     .join(" · ");
+}
+
+// "Live-Daten · DAWUM · <Institut>" bzw. "Fallback-Daten · Stand XX.XX.XXXX" -
+// bewusst nur im Nerd-Modus (Kapitel I), im Quick Mode sieht niemand das.
+function renderPollStatus() {
+  if (basisMode !== "aktuell") {
+    pollStatusNote.hidden = true;
+    return;
+  }
+  pollStatusNote.hidden = false;
+  pollStatusNote.textContent = currentPoll.isLive
+    ? `Live-Daten · DAWUM${currentPoll.institute ? " · " + currentPoll.institute : ""}`
+    : `Fallback-Daten · Stand ${currentPoll.date}`;
 }
 
 function updateBasisLabels() {
   const isAktuell = basisMode === "aktuell";
   basis2023Button.classList.toggle("active", !isAktuell);
   basisAktuellButton.classList.toggle("active", isAktuell);
+  renderPollStatus();
 
   basisInfo.innerHTML = isAktuell
     ? `<strong>Woher die Zahlen kommen:</strong> Wahlkreis-Verteilung wie 2023, aber landesweit auf den aktuellen
        Wahltrend verschoben (Umfrage-Verschiebung, Fachbegriff "Uniform Swing" &mdash; <em>nicht</em> dasselbe wie
        die Szenario-Verschiebung weiter unten). Quelle:
-       <a href="https://dawum.de/Berlin/" target="_blank" rel="noopener">${CURRENT_POLL.source}</a>,
-       Stand ${CURRENT_POLL.date}. Keine echte Wahlkreis-Umfrage, nur eine berlinweite hochgerechnet.
+       <a href="https://dawum.de/Berlin/" target="_blank" rel="noopener">${currentPoll.source}</a>,
+       Stand ${currentPoll.date}. Keine echte Wahlkreis-Umfrage, nur eine berlinweite hochgerechnet.
        <div class="poll-values">Umfragewerte: ${pollShareList()}</div>`
     : `<strong>Woher die Zahlen kommen:</strong> Amtliches Endergebnis der Wiederholungswahl vom 12.02.2023
        (Landeswahlleiterin Berlin, wahlen-berlin.de).`;
@@ -278,18 +333,23 @@ function renderNoLocalDataNote() {
     return;
   }
   const parts = [...NO_LOCAL_DATA_PARTIES]
-    .filter((p) => p in CURRENT_POLL.shares)
-    .map((p) => `${partyName(p)} ${CURRENT_POLL.shares[p].toFixed(1)} %`);
+    .filter((p) => p in currentPoll.shares)
+    .map((p) => `${partyName(p)} ${currentPoll.shares[p].toFixed(1)} %`);
   if (parts.length === 0) {
     noLocalDataNote.hidden = true;
     return;
   }
   noLocalDataNote.hidden = false;
   noLocalDataNote.textContent =
-    `Nicht in diesem Wahlkreis-Balken, nur als Berlin-Landeswert (keine 2023-Wahlkreisdaten): ${parts.join(" · ")}.`;
+    `ⓘ Keine echten 2023-Wahlkreisdaten, Wert landesweit hochgerechnet (Berlin gesamt: ${parts.join(" · ")}).`;
 }
 
-function showConstituency(constituencyId) {
+// async, weil DATASETS erst existiert, sobald der DAWUM-Live-Abruf
+// abgeschlossen ist (siehe initPoll()) - normalerweise ist das schon
+// laengst der Fall, wenn diese Funktion zum ersten Mal aufgerufen wird, weil
+// initPoll() parallel zur PLZ-Eingabe des Users laeuft.
+async function showConstituency(constituencyId) {
+  await pollReadyPromise;
   currentConstituencyId = constituencyId;
   currentConstituency = DATASETS[basisMode].find((c) => c.id === constituencyId);
   if (!currentConstituency) return;
@@ -298,7 +358,9 @@ function showConstituency(constituencyId) {
   constituencyName.textContent = currentConstituency.name;
   updateBasisLabels();
   renderBars(document.getElementById("firstVoteBaseline"), currentConstituency.firstVotes);
-  renderBars(document.getElementById("secondVoteBaseline"), withoutNoLocalDataParties(currentConstituency.secondVotes));
+  renderBars(document.getElementById("secondVoteBaseline"), currentConstituency.secondVotes, {
+    infoNote: noLocalDataInfoNote,
+  });
   renderNoLocalDataNote();
 
   computeAndRenderRecommendation();
@@ -514,8 +576,28 @@ function runDetailSimulation() {
 
   const { baseline, scenario } = simulate(DATASETS[basisMode], params);
 
-  renderBars(document.getElementById("baselineSeats"), baseline.seats, { seats: true });
-  renderBars(document.getElementById("scenarioSeats"), scenario.seats, { seats: true });
+  // baseline.seats/scenario.seats enthalten nur Parteien, die in dieser
+  // Rechnung >=5% haben (siehe engine.js: hareNiemeyer baut Sitze nur fuer
+  // eligibleVotes-Parteien). Eine Partei kann also z.B. im Szenario auftauchen,
+  // in der Basis aber komplett fehlen (nicht 0 Sitze - gar keine Zeile). Fuer
+  // den Vergleich brauchen beide Spalten dieselbe Parteien-Menge, sonst wirkt
+  // das Auftauchen/Verschwinden wie ein Rendering-Fehler statt wie die
+  // 5%-Huerde, die es tatsaechlich ist.
+  const allSeatParties = new Set([...Object.keys(baseline.seats), ...Object.keys(scenario.seats)]);
+  const fillZeros = (seats) => Object.fromEntries([...allSeatParties].map((p) => [p, seats[p] || 0]));
+  const belowThresholdNote = (allocation) => (party) =>
+    !allocation.eligibleParties.includes(party)
+      ? `${partyName(party)} liegt unter der 5%-Hürde in dieser Rechnung, deshalb 0 Sitze.`
+      : null;
+
+  renderBars(document.getElementById("baselineSeats"), fillZeros(baseline.seats), {
+    seats: true,
+    infoNote: belowThresholdNote(baseline),
+  });
+  renderBars(document.getElementById("scenarioSeats"), fillZeros(scenario.seats), {
+    seats: true,
+    infoNote: belowThresholdNote(scenario),
+  });
   renderDeltaChipsAndTable(baseline, scenario);
 
   const afdBefore = baseline.seats.afd || 0;

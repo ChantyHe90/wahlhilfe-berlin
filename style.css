@@ -131,6 +131,13 @@ button { font-family: var(--font-sans); cursor: pointer; border: none; backgroun
 }
 .btn-mark:hover { background: var(--signal-ink); }
 .btn-mark:active { transform: translateY(1px); }
+.btn-mark.is-loading { color: transparent; position: relative; pointer-events: none; }
+.btn-mark.is-loading::after {
+  content: "";
+  position: absolute; top: 50%; left: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px;
+  border: 2px solid rgba(245, 239, 226, 0.4); border-top-color: var(--paper); border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
 
 .btn-primary {
   width: 100%;
@@ -294,7 +301,6 @@ button { font-family: var(--font-sans); cursor: pointer; border: none; backgroun
   border-top: 1px solid var(--ink-15);
   padding: var(--space-5) 0;
 }
-.nerd-item:last-of-type { border-bottom: 1px solid var(--ink-15); }
 
 .nerd-item summary {
   list-style: none;
@@ -341,6 +347,14 @@ h4 { font-family: var(--font-sans); font-size: 0.82rem; font-weight: 600; color:
 .bar-track { background: var(--ink-08); height: 8px; }
 .bar-fill { height: 100%; transition: width 0.35s ease; }
 .bar-value { text-align: right; font-family: var(--font-mono); font-size: 0.78rem; color: var(--ink-70); }
+.info-icon {
+  display: inline-block;
+  margin-left: 4px;
+  color: var(--signal-text);
+  font-size: 0.8em;
+  cursor: help;
+}
+.info-icon:hover, .info-icon:focus-visible { color: var(--signal-ink); }
 
 .explain-box {
   font-family: var(--font-sans);
