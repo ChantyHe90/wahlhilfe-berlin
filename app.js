@@ -191,10 +191,12 @@ document.querySelectorAll(".nerd-item").forEach((details) => {
   });
 });
 
-// Erststimme testweise: BSW ausgeschlossen - keine echten Wahlkreis-
-// Erststimmendaten fuer diese Partei (siehe NO_LOCAL_DATA_PARTIES), eine
-// testweise Erststimme fuer sie waere komplett erfunden.
-fillPartySelect(firstVoteSelect, new Set(["afd", ...NO_LOCAL_DATA_PARTIES]));
+// Erststimme testweise: Parteien aus NO_LOCAL_DATA_PARTIES (BSW) sind hier
+// bewusst waehlbar - applySwing() rechnet fuer sie einfach ab Ausgangswert 0
+// (keine 2023-Basis), genau wie fuer jede andere Partei ist das Ergebnis eine
+// rein hypothetische Testrechnung, keine echte lokale Prognose. Deshalb kein
+// Datenfake noetig, nur der Hinweis in der UI (siehe firstVoteHint unten).
+fillPartySelect(firstVoteSelect, new Set(["afd"]));
 fillPartySelect(secondVoteSelect, new Set(["afd"]));
 
 plzButton.addEventListener("click", () => {

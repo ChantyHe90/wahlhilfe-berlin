@@ -178,6 +178,11 @@
               </p>
               <h4 id="firstVoteLabel">Erststimme (Direktkandidat:in)</h4>
               <div id="firstVoteBaseline" class="bars"></div>
+              <p class="hint">
+                BSW erscheint hier nicht: keine echten 2023-Wahlkreisdaten, also kein realer Ausgangswert. Weiter
+                unten (Kapitel V) kannst du trotzdem testen, was eine BSW-Erststimme hier bewirken würde &mdash;
+                als reine Testannahme ab 0.
+              </p>
             </div>
           </details>
 
@@ -245,6 +250,10 @@
                   <select id="secondVoteSelect"></select>
                 </label>
               </div>
+              <p class="hint">
+                BSW als Erststimme testen: Ausgangswert hier 0 (keine 2023-Wahlkreisdaten) &mdash; du testest also
+                die volle Verschiebung von 0 aus, nicht eine Veränderung von einem echten lokalen Ergebnis.
+              </p>
               <div class="row swing-row">
                 <label class="swing-label">
                   Verschiebung:
@@ -368,8 +377,10 @@
                 <li>
                   BSW hat keine echten 2023-Wahlkreisdaten (Partei existierte
                   damals nicht) &mdash; fließt nur in die landesweite
-                  Zweitstimmen-/Sitzberechnung ein, nicht in die Wahlkreis-Karte
-                  oder Erststimmen-Empfehlung.
+                  Zweitstimmen-/Sitzberechnung ein, nicht in die automatische
+                  Erststimmen-Empfehlung. Im Szenario-Test (Kapitel V) kannst du
+                  BSW trotzdem als Erststimme durchspielen &mdash; als reine
+                  Testannahme ab Ausgangswert 0, nicht als echte Prognose.
                 </li>
                 <li>
                   Direktmandate sind von der 5%-Hürde unabhängig (wie im echten
