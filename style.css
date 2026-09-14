@@ -224,7 +224,39 @@ button { font-family: var(--font-sans); cursor: pointer; border: none; backgroun
   font-size: clamp(1.6rem, 8vw, 2.1rem);
   margin: 0 0 var(--space-2);
 }
+.vote-definition {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  color: var(--ink-70);
+  font-size: 0.85rem;
+  margin: 0 0 var(--space-3);
+}
 .vote-desc { font-family: var(--font-sans); color: var(--ink-70); font-size: 0.92rem; margin: 0; max-width: 42ch; }
+.vote-top3 {
+  list-style: none;
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  color: var(--ink-70);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  max-width: 42ch;
+}
+.vote-top3 li { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-1) 0; border-top: 1px solid var(--ink-15); }
+.vote-top3 li:first-child { border-top: none; }
+.vote-top3 strong { color: var(--ink); font-weight: 700; }
+
+/* ---------- Praeferenz-Picker + persoenlicher Vergleich ---------- */
+.pref-checkboxes { display: flex; flex-wrap: wrap; gap: var(--space-3); margin: var(--space-4) 0; }
+.pref-checkboxes label {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-size: 0.92rem;
+  color: var(--ink);
+}
+.pref-checkboxes input[type="checkbox"] { accent-color: var(--signal); width: 18px; height: 18px; }
+.pref-block { padding: var(--space-2) 0; }
 
 .vote-connector { height: 1px; background: var(--ink-15); margin: var(--space-2) 0; }
 
@@ -280,7 +312,18 @@ button { font-family: var(--font-sans); cursor: pointer; border: none; backgroun
 /* ---------- SCREEN D: CTA ---------- */
 .cta-screen { text-align: center; }
 .cta-done { font-family: var(--font-serif); font-weight: 600; font-size: 1.2rem; margin: 0 0 var(--space-3); }
-.nerd-cta { font-size: 0.98rem; }
+.nerd-cta {
+  display: block;
+  width: fit-content;
+  margin: 0 auto var(--space-3);
+  padding: 12px 20px;
+  min-height: 44px;
+  font-size: 0.98rem;
+  border-radius: var(--radius-sm, 10px);
+  -webkit-tap-highlight-color: transparent;
+}
+.nerd-cta:last-of-type { margin-bottom: 0; }
+.nerd-cta:hover, .nerd-cta:focus-visible { background: var(--accent-soft, var(--paper-shade)); }
 
 /* ---------- Deep Dive ---------- */
 #nerdSection { margin-top: var(--space-8); }
@@ -335,6 +378,16 @@ button { font-family: var(--font-sans); cursor: pointer; border: none; backgroun
 .toggle-button { font-size: 0.95rem; color: var(--ink-35); font-weight: 600; padding: 2px 0; }
 .toggle-button.active { color: var(--ink); text-decoration: underline; text-decoration-color: var(--signal); text-underline-offset: 4px; }
 .toggle-sep { color: var(--ink-15); }
+
+.lang-toggle {
+  position: fixed;
+  top: var(--space-3);
+  right: var(--space-4);
+  z-index: 10;
+  margin-bottom: 0;
+  font-family: var(--font-mono);
+}
+.lang-toggle .toggle-button { font-size: 0.82rem; }
 
 .basis-info { font-family: var(--font-sans); font-size: 0.88rem; color: var(--ink-70); border-left: 2px solid var(--ink-15); padding-left: var(--space-3); }
 .basis-info a { color: var(--signal-text); }
@@ -432,6 +485,8 @@ footer {
   border-top: 1px solid var(--ink-15);
   padding-top: var(--space-4);
 }
+footer a { color: var(--signal-text); }
+footer .mono-hint { margin-top: var(--space-3); }
 
 /* ---------- Desktop: editorial split layouts ---------- */
 @media (min-width: 860px) {
@@ -443,7 +498,7 @@ footer {
     gap: var(--space-6);
     align-items: end;
   }
-  .cover-sub, .hero-row, #wahlkreisRow, #plzHint, .mono-hint { grid-column: 2; }
+  .cover-sub, .hero-row, #wahlkreisRow, #plzHint, .hero .mono-hint { grid-column: 2; }
   .cover-headline { grid-column: 1; grid-row: 1 / span 5; }
   .eyebrow:first-child { grid-column: 1 / -1; }
 
@@ -452,12 +507,12 @@ footer {
   .vote-block--local { padding-right: var(--space-6); }
   .vote-connector { width: 1px; height: auto; align-self: stretch; margin: 0; }
   .vote-block--land.breakout { left: 0; right: 0; width: auto; margin: 0; }
-  .vote-block-inner { max-width: none; margin: 0; padding: var(--space-6) 0 var(--space-6) var(--space-6); }
+  .vote-block-inner { max-width: none; margin: 0; padding: var(--space-6); }
 
   /* Zahl, Vergleichsbalken und Quelle bleiben untereinander in einer Spalte -
      nebeneinander (frueher: 3-Spalten-Grid) war nicht mehr als eine Aussage
      lesbar, weil Zahl und Balken visuell nicht mehr zusammengehoerten. */
-  .effect-band-inner { max-width: 520px; margin: 0; text-align: left; }
+  .effect-band-inner { max-width: 640px; margin: 0; text-align: left; }
   .effect-hero-number { justify-content: flex-start; }
   .effect-compare-bar { margin: var(--space-5) 0 0; }
   .effect-source { text-align: left; }

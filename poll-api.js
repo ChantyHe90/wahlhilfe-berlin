@@ -1,10 +1,11 @@
-// Laedt die neueste Berlin-Umfrage von der oeffentlichen DAWUM-API
-// (https://dawum.de/API/) und normalisiert sie auf das App-eigene Format
-// { date, source, institute, shares, isLive }. Reine Netzwerk-/Parsing-
-// Schicht, getrennt von app.js (State/Rendering) und engine.js (Berechnung).
-// Wirft nach aussen nie einen Fehler: loadCurrentPoll() faellt bei jedem
-// Problem (Netzwerk, Format, fehlende Partei) auf FALLBACK_POLL aus data.js
-// zurueck - siehe Kommentar dort.
+// Laedt die 4 neuesten Berlin-Umfragen (je Institut nur die neueste, siehe
+// SURVEYS_TO_AVERAGE) von der oeffentlichen DAWUM-API (https://dawum.de/API/)
+// und mittelt sie zu einem { date, source, institute, shares, isLive } -
+// robuster gegen Ausreisser einzelner Institute als eine einzelne Umfrage.
+// Reine Netzwerk-/Parsing-Schicht, getrennt von app.js (State/Rendering) und
+// engine.js (Berechnung). Wirft nach aussen nie einen Fehler: loadCurrentPoll()
+// faellt bei jedem Problem (Netzwerk, Format, fehlende Partei) auf
+// FALLBACK_POLL aus data.js zurueck - siehe Kommentar dort.
 
 const DAWUM_ENDPOINT = "https://api.dawum.de/newest_surveys.json";
 
@@ -53,21 +54,37 @@ function findBerlinParliamentId(parliamentsBlock) {
   return entry ? entry[0] : null;
 }
 
-function findNewestSurvey(surveysBlock, parliamentId) {
-  const matches = Object.values(surveysBlock).filter((s) => s.Parliament_ID === parliamentId);
-  if (matches.length === 0) return null;
+// newest_surveys.json liefert schon pro Institut nur die jeweils neueste
+// Umfrage - "die 4 neuesten Umfragen" heisst hier also automatisch "von 4
+// verschiedenen Instituten" (kein Institut kann doppelt vorkommen).
+const SURVEYS_TO_AVERAGE = 4;
+const MAX_SURVEY_AGE_DAYS = 21;
+
+function findRecentSurveys(
+  surveysBlock,
+  parliamentId,
+  limit = SURVEYS_TO_AVERAGE
+) {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - MAX_SURVEY_AGE_DAYS);
+
+  const matches = Object.values(surveysBlock)
+    .filter((s) => s.Parliament_ID === parliamentId)
+    .filter((s) => {
+      const date = new Date(`${s.Date}T12:00:00`);
+      return !Number.isNaN(date.getTime()) && date >= cutoff;
+    });
+
   matches.sort((a, b) => b.Date.localeCompare(a.Date));
-  return matches[0];
+
+  return matches.slice(0, limit);
 }
 
-// Baut aus einer rohen DAWUM-Survey unser {date, source, institute, shares}.
-// Gibt null zurueck, wenn irgendeine der 7 getrackten Parteien in den
-// Ergebnissen fehlt (z.B. unter "Sonstige" zusammengefasst) - dann ist diese
-// Umfrage fuer unser Modell unvollstaendig. Bewusst KEIN Fallback auf 0% fuer
-// die fehlende Partei und KEIN Mix aus Live- und Fallback-Werten innerhalb
-// derselben Umfrage (siehe Konzept-Abwaegung) - stattdessen faellt
-// loadCurrentPoll() dann komplett auf FALLBACK_POLL zurueck.
-function normalizeSurvey(survey, partyIdLookup, institutesBlock) {
+// Extrahiert nur die Parteianteile einer rohen DAWUM-Survey. Gibt null
+// zurueck, wenn irgendeine der 7 getrackten Parteien fehlt (z.B. unter
+// "Sonstige" zusammengefasst) - so eine Umfrage fliesst gar nicht erst in
+// den Mittelwert ein, statt ihn mit einer fehlenden Partei zu verzerren.
+function extractShares(survey, partyIdLookup) {
   const shares = {};
   for (const ourId of TRACKED_PARTY_IDS) {
     const dawumId = partyIdLookup[ourId];
@@ -75,12 +92,37 @@ function normalizeSurvey(survey, partyIdLookup, institutesBlock) {
     if (value === undefined) return null;
     shares[ourId] = value;
   }
+  return shares;
+}
 
-  const institute = institutesBlock[survey.Institute_ID]?.Name || null;
+// Baut aus mehreren rohen DAWUM-Surveys (verschiedene Institute) unser
+// {date, source, institute, shares} per einfachem, ungewichtetem Mittelwert
+// je Partei - kein Institut zaehlt staerker als ein anderes. Umfragen ohne
+// alle 7 getrackten Parteien werden vorher rausgefiltert (siehe
+// extractShares), nicht mitgezaehlt. Gibt null zurueck, wenn danach kein
+// Institut mehr uebrig ist.
+function averageSurveys(surveys, partyIdLookup, institutesBlock) {
+  const usable = surveys
+    .map((survey) => ({ survey, shares: extractShares(survey, partyIdLookup) }))
+    .filter(({ shares }) => shares !== null);
+  if (usable.length === 0) return null;
+
+  const shares = {};
+  for (const ourId of TRACKED_PARTY_IDS) {
+    const sum = usable.reduce((acc, { shares: s }) => acc + s[ourId], 0);
+    shares[ourId] = sum / usable.length;
+  }
+
+  const instituteNames = usable.map(
+    ({ survey }) => institutesBlock[survey.Institute_ID]?.Name || "unbekanntes Institut"
+  );
+  const newestDate = usable.map(({ survey }) => survey.Date).sort().at(-1);
+
   return {
-    date: formatGermanDate(survey.Date),
-    source: institute ? `${institute} (DAWUM Open Data)` : "DAWUM Open Data",
-    institute,
+    date: formatGermanDate(newestDate),
+    source: `Ø aus ${usable.length} Instituten (${instituteNames.join(", ")}) — DAWUM Open Data`,
+    institute: instituteNames.join(", "),
+    instituteCount: usable.length,
     shares,
   };
 }
@@ -102,14 +144,14 @@ function loadCurrentPoll() {
       const parliamentId = findBerlinParliamentId(data.Parliaments || {});
       if (!parliamentId) throw new Error("Kein Berlin-Parlament in DAWUM-Daten gefunden");
 
-      const survey = findNewestSurvey(data.Surveys || {}, parliamentId);
-      if (!survey) throw new Error("Keine Berlin-Umfrage in DAWUM-Daten gefunden");
+      const recentSurveys = findRecentSurveys(data.Surveys || {}, parliamentId);
+      if (recentSurveys.length === 0) throw new Error("Keine Berlin-Umfrage in DAWUM-Daten gefunden");
 
       const partyIdLookup = buildPartyIdLookup(data.Parties || {});
-      const normalized = normalizeSurvey(survey, partyIdLookup, data.Institutes || {});
-      if (!normalized) throw new Error("Neueste Berlin-Umfrage deckt nicht alle getrackten Parteien ab");
+      const averaged = averageSurveys(recentSurveys, partyIdLookup, data.Institutes || {});
+      if (!averaged) throw new Error("Keine der neuesten Berlin-Umfragen deckt alle getrackten Parteien ab");
 
-      return { ...normalized, isLive: true };
+      return { ...averaged, isLive: true };
     })
     .catch((err) => {
       console.warn("[poll-api] Live-Umfrage nicht verfuegbar, nutze Fallback:", err.message);
@@ -124,8 +166,9 @@ if (typeof module !== "undefined" && module.exports) {
     DAWUM_SHORTCUT_TO_PARTY_ID,
     buildPartyIdLookup,
     findBerlinParliamentId,
-    findNewestSurvey,
-    normalizeSurvey,
+    findRecentSurveys,
+    extractShares,
+    averageSurveys,
     loadCurrentPoll,
   };
 }

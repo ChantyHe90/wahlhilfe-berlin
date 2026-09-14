@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Der Bogen — Wahlkreis-Sitzsimulator (PoC)</title>
+    <title>Berlin – Wahlkreis-Sitzsimulator (PoC)</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -13,12 +13,24 @@
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
+    <div
+      class="lang-toggle toggle-group"
+      role="group"
+      aria-label="Sprache / Language"
+    >
+      <button type="button" id="langDeButton" class="toggle-button active">
+        DE
+      </button>
+      <span class="toggle-sep" aria-hidden="true">/</span>
+      <button type="button" id="langEnButton" class="toggle-button">EN</button>
+    </div>
+
     <header class="hero">
-      <p class="eyebrow">Berlin · Wahl 2026</p>
-      <h1 class="cover-headline">
+      <p class="eyebrow" data-i18n="hero.eyebrow">Berlin · Wahl 2026</p>
+      <h1 class="cover-headline" data-i18n="hero.headline">
         Welche Stimme<br />macht einen<br />Unterschied?
       </h1>
-      <p class="cover-sub">
+      <p class="cover-sub" data-i18n="hero.sub">
         Wenn dein Ziel ist, AfD-Sitze möglichst zu vermeiden.
       </p>
 
@@ -27,20 +39,26 @@
           id="plzInput"
           type="text"
           placeholder="Deine PLZ, z. B. 10115"
+          data-i18n-placeholder="hero.plzPlaceholder"
           inputmode="numeric"
           maxlength="5"
         />
-        <button id="plzButton" class="btn-mark" aria-label="Los">→</button>
+        <button
+          id="plzButton"
+          class="btn-mark"
+          aria-label="Los"
+          data-i18n-aria-label="hero.go"
+        >
+          →
+        </button>
       </div>
       <div class="row" id="wahlkreisRow" hidden>
         <label>
-          Dein Wahlkreis
+          <span data-i18n="hero.constituencyLabel">Dein Wahlkreis</span>
           <select id="wahlkreisSelect"></select>
         </label>
       </div>
       <p id="plzHint" class="hint"></p>
-
-      <p class="hint mono-hint">dauert ~10 sekunden</p>
     </header>
 
     <main>
@@ -52,31 +70,49 @@
 
         <div class="vote-metaphor">
           <div class="vote-block vote-block--local">
-            <p class="vote-eyebrow">01 — Dein Kiez</p>
-            <h3 class="vote-headline">Erst-<br />stimme</h3>
+            <p class="vote-eyebrow" data-i18n="result.local.eyebrow">
+              01 — Dein Kiez
+            </p>
+            <h3 class="vote-headline" data-i18n="result.local.headline">
+              Erst-<br />stimme
+            </h3>
+            <p class="vote-definition" data-i18n="result.local.definition">
+              Wer liegt aktuell bei Dir im Kiez vorne?
+            </p>
             <p class="vote-party" id="firstRecoParty">–</p>
             <p class="vote-desc" id="firstRecoText"></p>
+            <ul class="vote-top3" id="firstRecoTop3"></ul>
           </div>
 
           <div class="vote-connector" aria-hidden="true"></div>
 
           <div class="vote-block vote-block--land breakout">
             <div class="vote-block-inner">
-              <p class="vote-eyebrow">02 — Ganz Berlin</p>
-              <h3 class="vote-headline">Zweit-<br />stimme</h3>
+              <p class="vote-eyebrow" data-i18n="result.land.eyebrow">
+                02 — Ganz Berlin
+              </p>
+              <h3 class="vote-headline" data-i18n="result.land.headline">
+                Zweit-<br />stimme
+              </h3>
+              <p class="vote-definition" data-i18n="result.land.definition">
+                Welche Partei ist aktuell in ganz Berlin vorne?
+              </p>
               <p class="vote-party" id="secondRecoParty">–</p>
               <p class="vote-desc" id="secondRecoText"></p>
+              <ul class="vote-top3" id="secondRecoTop3"></ul>
             </div>
           </div>
         </div>
       </section>
 
       <!-- SCREEN 3: der Effekt, Hero-Moment -->
-      <section class="screen effect-band breakout" id="effectSection" hidden>
+      <section class="screen effect-band" id="effectSection" hidden>
         <div class="effect-band-inner">
-          <p class="eyebrow">Das verändert dein Modell</p>
+          <p class="eyebrow" data-i18n="effect.eyebrow">
+            Das verändert dein Modell
+          </p>
           <div class="effect-hero">
-            <p class="effect-hero-label">AfD-Sitze</p>
+            <p class="effect-hero-label" data-i18n="effect.label">AfD-Sitze</p>
             <div class="effect-hero-number">
               <span id="effectFrom">–</span>
               <span class="bogen" aria-hidden="true">&rarr;</span>
@@ -106,16 +142,108 @@
       <section class="screen cta-screen" id="ctaSection" hidden>
         <div class="rule"></div>
         <p class="cta-done">
-          Das reicht dir? <span aria-hidden="true">✓</span>
+          <span data-i18n="cta.done">Das reicht dir?</span>
+          <span aria-hidden="true">✓</span>
         </p>
-        <button type="button" id="nerdToggle" class="text-link nerd-cta">
+        <button
+          type="button"
+          id="prefToggle"
+          class="text-link nerd-cta"
+          aria-expanded="false"
+          aria-controls="prefSection"
+          data-i18n="cta.prefToggle"
+        >
+          Ich würde eigentlich lieber eine andere Partei wählen →
+        </button>
+        <button
+          type="button"
+          id="nerdToggle"
+          class="text-link nerd-cta"
+          aria-expanded="false"
+          aria-controls="nerdSection"
+          data-i18n="cta.nerdToggle"
+        >
           Nope– Ich will mehr wissen! →
+        </button>
+      </section>
+
+      <!-- SCREEN 4.5: Parteipräferenz abfragen (optional, blockiert den Fast-Lane-Pfad nicht) -->
+      <section class="screen" id="prefSection" hidden>
+        <p class="eyebrow" data-i18n="pref.eyebrow">Deine Präferenz</p>
+        <h3 class="vote-headline" data-i18n="pref.headline">
+          Welche Partei kommt für dich infrage?
+        </h3>
+        <p class="hint" data-i18n="pref.hint">
+          Wir empfehlen dir nichts danach, was du inhaltlich vertreten willst —
+          das entscheidest du.
+        </p>
+        <div class="pref-checkboxes" id="prefCheckboxes"></div>
+        <div class="row">
+          <label>
+            <span data-i18n="pref.preferredLabel">Am liebsten (optional)</span>
+            <select id="prefPreferredSelect">
+              <option value="" data-i18n="pref.noPreference">
+                keine Angabe
+              </option>
+            </select>
+          </label>
+        </div>
+        <button
+          type="button"
+          id="prefApplyButton"
+          class="btn-primary"
+          data-i18n="pref.compareButton"
+        >
+          Vergleichen
+        </button>
+      </section>
+
+      <!-- SCREEN 4.6: persönlicher Vergleich -->
+      <section class="screen" id="prefResultSection" hidden>
+        <p class="eyebrow" data-i18n="prefResult.eyebrow">
+          Bringt strategisches Wählen hier überhaupt etwas?
+        </p>
+        <div class="pref-block" id="prefFirstBlock">
+          <p class="vote-eyebrow" data-i18n="prefResult.first.eyebrow">
+            Erststimme
+          </p>
+          <p class="vote-definition" data-i18n="prefResult.first.definition">
+            Ist ein AfD-Direktmandat in deinem Wahlkreis realistisch?
+          </p>
+          <p class="vote-party" id="prefFirstParty"></p>
+          <p class="vote-desc" id="prefFirstText"></p>
+          <ul class="vote-top3" id="prefFirstTop3"></ul>
+        </div>
+        <div class="rule rule--tight"></div>
+        <div class="pref-block" id="prefSecondBlock">
+          <p class="vote-eyebrow" data-i18n="prefResult.second.eyebrow">
+            Zweitstimme
+          </p>
+          <p class="vote-definition" data-i18n="prefResult.second.definition">
+            Gibt es einen robusten Grund, von deiner Wunschpartei abzuweichen?
+          </p>
+          <p class="vote-party" id="prefSecondParty"></p>
+          <p class="vote-desc" id="prefSecondText"></p>
+          <ul class="vote-top3" id="prefSecondTable"></ul>
+        </div>
+        <p class="hint" data-i18n="prefResult.hint">
+          Du entscheidest, wie viel Strategie dir deine Parteipräferenz wert
+          ist.
+        </p>
+        <button
+          type="button"
+          id="prefNerdToggle"
+          class="text-link nerd-cta"
+          aria-expanded="false"
+          aria-controls="nerdSection"
+          data-i18n="prefResult.nerdToggle"
+        >
+          Wie kommen wir darauf? →
         </button>
       </section>
 
       <!-- DEEP DIVE: editorial Kapitelregister statt Settings-Akkordeon -->
       <section id="nerdSection" hidden>
-        <p class="eyebrow deep-dive-eyebrow">— Show me the receipts —</p>
         <h2 class="nerd-title">Genauer hinsehen</h2>
 
         <nav class="nerd-index" aria-label="Kapitel">
@@ -139,6 +267,13 @@
           </button>
           <button type="button" data-target="nerd-architektur">
             <span class="ix-num">VII</span> Wie funktioniert die App?
+          </button>
+          <button type="button" data-target="nerd-idee">
+            <span class="ix-num">VIII</span> Warum gibt es diese App?
+          </button>
+          <button type="button" data-target="nerd-strategie">
+            <span class="ix-num">IX</span> Wann lohnt sich taktisches Wählen
+            wirklich?
           </button>
         </nav>
 
@@ -180,9 +315,10 @@
               <h4 id="firstVoteLabel">Erststimme (Direktkandidat:in)</h4>
               <div id="firstVoteBaseline" class="bars"></div>
               <p class="hint">
-                BSW erscheint hier nicht: keine echten 2023-Wahlkreisdaten, also kein realer Ausgangswert. Weiter
-                unten (Kapitel V) kannst du trotzdem testen, was eine BSW-Erststimme hier bewirken würde &mdash;
-                als reine Testannahme ab 0.
+                BSW erscheint hier nicht: keine echten 2023-Wahlkreisdaten, also
+                kein realer Ausgangswert. Weiter unten (Kapitel V) kannst du
+                trotzdem testen, was eine BSW-Erststimme hier bewirken würde
+                &mdash; als reine Testannahme ab 0.
               </p>
             </div>
           </details>
@@ -252,8 +388,10 @@
                 </label>
               </div>
               <p class="hint">
-                BSW als Erststimme testen: Ausgangswert hier 0 (keine 2023-Wahlkreisdaten) &mdash; du testest also
-                die volle Verschiebung von 0 aus, nicht eine Veränderung von einem echten lokalen Ergebnis.
+                BSW als Erststimme testen: Ausgangswert hier 0 (keine
+                2023-Wahlkreisdaten) &mdash; du testest also die volle
+                Verschiebung von 0 aus, nicht eine Veränderung von einem echten
+                lokalen Ergebnis.
               </p>
               <div class="row swing-row">
                 <label class="swing-label">
@@ -495,12 +633,100 @@ Basis-Sitze vs. Szenario-Sitze → AfD-Effekt + Delta-Chips + Warum-Erklärung</
               </table>
             </div>
           </details>
+
+          <details class="nerd-item" id="nerd-idee">
+            <summary>Warum gibt es diese App?</summary>
+            <div class="nerd-body">
+              <p class="hint">
+                Ich finde Wählen ehrlich gesagt ziemlich kompliziert. Und auch
+                wenn ich mich informieren möchte, verliere ich mich schnell
+                zwischen Wahlprogrammen, Umfragen, Erst- und Zweitstimme,
+                Wahlkreisen und Sitzverteilungen.
+              </p>
+              <p class="hint">
+                Gleichzeitig hatte ich eine ziemlich konkrete Frage: Wenn mein
+                Ziel ist, möglichst wenig AfD-Sitze im Berliner Abgeordnetenhaus
+                zu ermöglichen &mdash; wie kann ich meine Stimmen dafür
+                strategisch einsetzen?
+              </p>
+              <p class="hint">
+                Genau daraus ist diese App entstanden. Sie soll diese Frage
+                möglichst einfach beantworten, indem sie aktuelle Umfragen, die
+                Ergebnisse in deinem Wahlkreis und die Regeln der Sitzverteilung
+                zusammenbringt.
+              </p>
+              <p class="hint">
+                <strong>Aber:</strong> Die App nimmt dir deine Wahlentscheidung
+                nicht ab. Sie zeigt dir eine mögliche strategische Perspektive
+                auf deine Stimmen. Umfragen ändern sich, Wahlergebnisse lassen
+                sich nicht vorhersagen und auch dieses Modell muss an einigen
+                Stellen vereinfachen.
+              </p>
+              <p class="hint">
+                Sieh das Ergebnis deshalb als Inspiration und Ausgangspunkt.
+                Informiere dich über die vorgeschlagenen Parteien und
+                Kandidat:innen und entscheide selbst, ob sie auch inhaltlich zu
+                dem passen, was du wählen möchtest.
+              </p>
+            </div>
+          </details>
+
+          <details class="nerd-item" id="nerd-strategie">
+            <summary>Wann lohnt sich taktisches Wählen wirklich?</summary>
+            <div class="nerd-body">
+              <p class="hint">
+                <strong>Erststimme &mdash; Direktmandat:</strong> Wer im
+                Wahlkreis die meisten Erststimmen bekommt, gewinnt das
+                Direktmandat. Diese Direktmandate werden auf den Sitzanspruch
+                angerechnet, den die Partei über die Zweitstimme landesweit
+                proportional erreicht. Gewinnt eine Partei mehr Direktmandate,
+                als ihr proportional zustehen, entstehen Überhangmandate &mdash;
+                und um die Verhältnisse wieder auszugleichen, wachsen zusätzlich
+                Ausgleichsmandate für alle anderen Parteien. Ein einzelnes
+                Direktmandat wirkt sich deshalb normalerweise
+                <strong>nicht</strong> auf die landesweite Sitzverteilung aus
+                (dein Wahlkreis ist nur einer von 78) &mdash; kann es aber in
+                seltenen Grenzfällen doch, wenn eine Partei genau an dieser
+                Schwelle liegt.
+              </p>
+              <p class="hint">
+                <strong
+                  >Zweitstimme &mdash; proportionaler Sitzanspruch:</strong
+                >
+                bestimmt über Hare-Niemeyer, wie viele Sitze jede Partei
+                bekommt. Parteien unter 5% fliegen raus &mdash; es sei denn, sie
+                haben mindestens ein Direktmandat gewonnen (Grundmandatsklausel,
+                amtlich bestätigt). Die letzten Sitze gehen an die höchsten
+                Restanteile (Kapitel IV) &mdash; knappe Fälle können kippen.
+              </p>
+              <p class="hint">
+                <strong>Wann zeigen wir einen strategischen Hinweis?</strong>
+                Nur wenn er <em>robust</em> ist: wir testen mehrere plausible
+                Verschiebungsgrößen (+1, +2, +3, +5 Prozentpunkte), nicht nur
+                eine. Eine Partei gilt nur dann als sinnvolle Alternative, wenn
+                sie bei <strong>jeder</strong> dieser Größen mindestens gleich
+                gut abschneidet wie deine Wunschpartei &mdash; und bei
+                mindestens einer davon wirklich besser. Ein Effekt, der nur bei
+                genau einer Verschiebungsgröße kurz aufblitzt, zählt bewusst
+                nicht &mdash; das wäre eine Scheingenauigkeit. Situationen, in
+                denen das am ehesten passiert: eine Partei nahe der 5%-Hürde,
+                eine Partei unter 5% mit realistischem Direktmandat, ein sehr
+                knappes Hare-Niemeyer-Restmandat, oder spürbare
+                Überhang-/Ausgleichseffekte.
+              </p>
+              <p class="hint">
+                Findet das Modell keinen robusten Grund: wir sagen das genauso,
+                statt eine Partei künstlich wegzuoptimieren oder eine
+                Scheinempfehlung zu erzeugen.
+              </p>
+            </div>
+          </details>
         </div>
       </section>
     </main>
 
     <footer>
-      <p>
+      <p data-i18n="footer.disclaimer">
         Keine Wahlempfehlung, nur eine Modellrechnung: echte Ergebnisse 2023
         (Landeswahlleiterin Berlin), optional verschoben auf den aktuellen
         Berlin-Wahltrend (dawum.de, gleichmäßig auf alle Wahlkreise übertragen).
@@ -511,6 +737,15 @@ Basis-Sitze vs. Szenario-Sitze → AfD-Effekt + Delta-Chips + Warum-Erklärung</
         PLZ-Zuordnung: Berlin-PLZ überschneiden sich mit Bezirksgrenzen, darum
         wählst du deinen Wahlkreis aus einer kurzen Liste statt automatisch
         exakt zugeordnet zu werden.
+      </p>
+      <p class="mono-hint">
+        <a
+          href="https://github.com/ChantyHe90/wahlhilfe-berlin"
+          target="_blank"
+          rel="noopener"
+          data-i18n="footer.github"
+          >Quellcode auf GitHub</a
+        >
       </p>
     </footer>
 

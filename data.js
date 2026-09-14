@@ -153,3 +153,7 @@ const CONSTITUENCIES = [
   { id: "reinickendorf-5", name: "Reinickendorf 5", bezirkId: "reinickendorf", firstVotes: { spd: 2934, cdu: 5702, gruene: 835, linke: 506, afd: 1838, fdp: 407 }, secondVotes: { spd: 2846, cdu: 5356, gruene: 867, linke: 504, afd: 1876, fdp: 497 } },
   { id: "reinickendorf-6", name: "Reinickendorf 6", bezirkId: "reinickendorf", firstVotes: { spd: 4396, cdu: 9889, gruene: 3615, linke: 510, afd: 1230, fdp: 1110 }, secondVotes: { spd: 4118, cdu: 9530, gruene: 3307, linke: 753, afd: 1301, fdp: 1470 } },
 ];
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = { PARTIES, FALLBACK_POLL, BEZIRKE, CONSTITUENCIES };
+}

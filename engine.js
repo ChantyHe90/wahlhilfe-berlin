@@ -17,16 +17,16 @@
   // absolute Stimmenzahl, dann alphabetisch nach PartyId. Nur fuer Reproduzierbarkeit, kein Abbild der
   // amtlichen Losverfahren-Praxis.
 
-  // 5%-Hürde — Partei unter 5% der Zweitstimmen (berlinweit) kriegt keine Sitze aus der Zweitstimmen-Rechnung,
-  // fliegt komplett aus der Hare-Niemeyer-Rechnung raus. In allocateParliament(): eligibleParties filtert das.
+  // 5%-Hürde + Grundmandatsklausel — Partei unter 5% der Zweitstimmen (berlinweit) kriegt keine Sitze aus der
+  // Zweitstimmen-Rechnung, ES SEI DENN sie hat mindestens ein Direktmandat gewonnen (offiziell bestaetigt:
+  // parlament-berlin.de/Lexikon/sperrklausel, Stand Recherche 09/2026 - Berlin braucht dafuer nur 1
+  // Direktmandat, nicht 3 wie im Bundestagswahlrecht). Diese Partei nimmt dann VOLL an der proportionalen
+  // Hare-Niemeyer-Rechnung teil, nicht nur mit ihren gewonnenen Direktmandaten - in allocateParliament()
+  // fliesst sie deshalb direkt in eligibleParties/eligibleVotes ein, kein nachtraeglicher Sonderfall.
   //
   // Direktmandat und 5%-Huerde sind zwei getrennte Dinge und duerfen nicht vermischt werden: wer im Wahlkreis
   // die meisten Erststimmen bekommt, gewinnt das Direktmandat — unabhaengig davon, ob die eigene Partei
-  // landesweit ueber oder unter 5% liegt (getConstituencyWinners() kennt eligibleParties nicht mehr). Ob eine
-  // Partei unter 5% ihr gewonnenes Direktmandat "einfach so" behaelt, obwohl sie sonst keine Sitze aus der
-  // Zweitstimmen-Rechnung bekommt, ist in echtem Wahlrecht ein Sonderfall (vergleichbar einer
-  // Grundmandatsklausel-Wirkung nur fuer die gewonnenen Wahlkreise, nicht fuer die ganze Landesliste). Diese
-  // App bildet das vereinfacht ab: siehe Kommentar bei der Ausgleichs-Schleife in allocateParliament().
+  // landesweit ueber oder unter 5% liegt (getConstituencyWinners() kennt eligibleParties nicht mehr).
 
   // Szenario-Verschiebung (scenarioSwingPct, applySwing()) — simuliert NICHT eine einzelne Stimme, sondern die
   // Frage "was waere, wenn Partei X berlinweit N Prozentpunkte staerker abschneidet". Die Prozentpunkte kommen
@@ -38,10 +38,9 @@
   // Zwecken.
 
   // Zusatz, nicht im Diagramm-Text: engine.js macht noch vereinfachte Überhang-/Ausgleichsmandate — zählt Sitze
-  // hoch bis jede Partei ueber der 5%-Huerde mindestens so viele Sitze hat wie Direktmandate gewonnen
-  // (while-Schleife in allocateParliament()). Parteien unter der 5%-Huerde mit Direktmandat bekommen ihre
-  // Direktmandate separat obendrauf, ausserhalb der proportionalen Rechnung (siehe Kommentar dort) — kein
-  // echtes Ueberhang-/Ausgleichsmandatsverfahren fuer diesen Fall, nur eine sichtbare Modellgrenze.
+  // hoch bis jede huerdenberechtigte Partei (5% oder Grundmandat, siehe oben) mindestens so viele Sitze hat
+  // wie Direktmandate gewonnen (while-Schleife in allocateParliament()). Vereinfacht landesweit in einem
+  // Schritt statt wie im echten Verfahren zweistufig ueber Bezirkslisten - siehe Kommentar dort.
 
 // Hare-Niemeyer-Sitzverteilung: floor(Quote) je Partei, Restsitze an die
 // hoechsten Nachkommastellen. Gibt neben den Sitzen auch die Rechenbasis pro
@@ -132,9 +131,16 @@ function allocateParliament(constituencies, options = {}) {
   const totals = sumSecondVotes(constituencies);
   const totalValid = Object.values(totals).reduce((a, b) => a + b, 0);
 
+  const { winners, directCounts } = getConstituencyWinners(constituencies);
+
+  // 5%-Huerde MIT Grundmandatsklausel (siehe Datei-Kommentar oben): eine
+  // Partei ist huerdenberechtigt, wenn sie entweder >=5% Zweitstimmen hat
+  // ODER mindestens ein Direktmandat gewonnen hat. Deshalb directCounts hier
+  // schon mit einbeziehen, statt Direktmandate erst nachtraeglich als
+  // Sonderfall zu behandeln.
   const eligibleParties = new Set(
     Object.entries(totals)
-      .filter(([, v]) => (v / totalValid) * 100 >= thresholdPct)
+      .filter(([p, v]) => (v / totalValid) * 100 >= thresholdPct || (directCounts[p] || 0) >= 1)
       .map(([p]) => p)
   );
 
@@ -142,14 +148,11 @@ function allocateParliament(constituencies, options = {}) {
     Object.entries(totals).filter(([p]) => eligibleParties.has(p))
   );
 
-  const { winners, directCounts } = getConstituencyWinners(constituencies);
-
   // Vereinfachte Ausgleichsmandate: Sitzzahl so lange erhoehen, bis jede
-  // *huerdenberechtigte* Partei mindestens so viele Sitze per Hare-Niemeyer
-  // bekommt, wie sie Direktmandate hat. Nur eligible Parteien pruefen, sonst
-  // wuerde eine Partei unter 5% mit Direktmandat (kann per Erststimme
-  // vorkommen, siehe oben) nie in eligibleVotes/seats auftauchen und die
-  // Schleife liefe bis zum guard-Limit durch.
+  // huerdenberechtigte Partei (5% oder Grundmandat) mindestens so viele
+  // Sitze per Hare-Niemeyer bekommt, wie sie Direktmandate hat. Weil
+  // Grundmandats-Parteien jetzt schon in eligibleVotes stehen, deckt das
+  // automatisch auch ihren Fall ab - kein separater Sonderfall mehr noetig.
   let totalSeats = baseSeats;
   let allocation = hareNiemeyer(eligibleVotes, totalSeats);
   let guard = 0;
@@ -164,21 +167,7 @@ function allocateParliament(constituencies, options = {}) {
     guard++;
   }
 
-  const seats = { ...allocation.seats };
-
-  // Modellgrenze: gewinnt eine Partei unter der 5%-Huerde trotzdem ein
-  // Direktmandat, bekommt sie im echten Wahlrecht diesen einen Sitz (siehe
-  // Datei-Kommentar oben), aber keine Sitze aus der Zweitstimmen-Rechnung,
-  // weil ihre Zweitstimmen dort nicht mitzaehlen. Diese App zaehlt solche
-  // Direktmandate 1:1 obendrauf - kein echtes Ueberhang-/
-  // Ausgleichsmandatsverfahren fuer diesen Fall, nur eine sichtbare
-  // Modellgrenze statt einer scheinbar exakten Berechnung.
-  for (const [p, d] of Object.entries(directCounts)) {
-    if (!eligibleParties.has(p)) {
-      seats[p] = d;
-      totalSeats += d;
-    }
-  }
+  const seats = allocation.seats;
 
   return {
     totalSeats,
@@ -324,15 +313,29 @@ function buildCurrentBaseline(constituencies, pollShares) {
 // der Empfehlung (nur Parteien vorschlagen, die auch landesweit eine Rolle
 // spielen), unabhaengig davon, dass ein Direktmandat selbst laut
 // getConstituencyWinners() keine 5%-Huerde kennt.
-function recommendDirectMandateAgainst(constituency, eligibleParties, avoidPartyId) {
-  const entries = Object.entries(constituency.firstVotes)
-    .filter(([p]) => eligibleParties.includes(p))
+// candidateParties: aus wem empfohlen werden darf (z.B. eligibleParties fuer
+// die Default-Empfehlung, oder die persoenlichen acceptableParties einer
+// Nutzer:in). contextParties: gegen wen AfDs Kompetitivitaet beurteilt wird -
+// standardmaessig gleich candidateParties (bisheriges Verhalten), sollte fuer
+// eine ehrliche avoidCompetitive-Einschaetzung aber das ECHTE lokale Feld
+// sein (z.B. Object.keys(constituency.firstVotes)), sonst koennte das
+// Herausfiltern nicht gewuenschter Parteien AfD kuenstlich kompetitiver oder
+// unkompetitiver aussehen lassen, als sie real ist. Getrennt, seit die
+// App personalisierte Empfehlungen mit einer eingeschraenkten
+// Kandidatenliste unterstuetzt.
+function recommendDirectMandateAgainst(constituency, candidateParties, avoidPartyId, contextParties = candidateParties) {
+  const contextEntries = Object.entries(constituency.firstVotes)
+    .filter(([p]) => contextParties.includes(p))
     .sort((a, b) => b[1] - a[1]);
-  const avoidIndex = entries.findIndex(([p]) => p === avoidPartyId);
-  const challengers = entries.filter(([p]) => p !== avoidPartyId);
-  const leader = entries[0] || null;
-  const avoidEntry = avoidIndex >= 0 ? entries[avoidIndex] : null;
+  const avoidIndex = contextEntries.findIndex(([p]) => p === avoidPartyId);
+  const avoidEntry = avoidIndex >= 0 ? contextEntries[avoidIndex] : null;
   const avoidLeads = avoidIndex === 0;
+
+  const candidateEntries = Object.entries(constituency.firstVotes)
+    .filter(([p]) => candidateParties.includes(p))
+    .sort((a, b) => b[1] - a[1]);
+  const challengers = candidateEntries.filter(([p]) => p !== avoidPartyId);
+  const leader = candidateEntries[0] || null;
   const recommended = avoidLeads ? challengers[0] : leader;
 
   let margin = null;
@@ -347,7 +350,8 @@ function recommendDirectMandateAgainst(constituency, eligibleParties, avoidParty
     avoidCompetitive: avoidIndex !== -1 && avoidIndex <= 1,
     avoidVotes: avoidEntry ? avoidEntry[1] : 0,
     margin,
-    ranking: entries,
+    ranking: candidateEntries,
+    contextRanking: contextEntries,
   };
 }
 
@@ -382,6 +386,61 @@ function recommendSecondVoteAgainst(constituencies, avoidPartyId, scenarioSwingP
   const bestParties = results.filter((r) => r.delta === bestDelta);
 
   return { baseline, baselineSeats, results, bestDelta, bestParties };
+}
+
+// Verschiebungsgroessen fuer den Robustheits-Check unten - mehrere plausible
+// Annahmen statt einer einzelnen Zahl, siehe findRobustSecondVoteAlternative.
+const ROBUSTNESS_SWINGS = [1, 2, 3, 5];
+
+// Beantwortet die eigentliche Produktfrage der Zweitstimmen-Personalisierung:
+// "Gibt es einen ROBUSTEN Grund, von referenceParty (z.B. der Wunschpartei)
+// abzuweichen?" - nicht "wer gewinnt bei einer einzelnen +3pp-Annahme".
+//
+// Ein einzelnes Szenario kann an einer Zufalls-Schwelle liegen (5%-Huerde,
+// Hare-Niemeyer-Restanteil-Cutoff, siehe Kommentar dort) und bei leicht
+// anderer Verschiebungsgroesse kippen. Deshalb: eine Partei gilt hier nur
+// als "robuste Alternative" zu referenceParty, wenn sie bei JEDER Groesse aus
+// ROBUSTNESS_SWINGS mindestens gleich gut abschneidet (avoidPartyId bekommt
+// nie MEHR Sitze als bei referenceParty) UND bei MINDESTENS EINER Groesse
+// strikt besser. Ein Ergebnis, das nur bei genau einem Wert kurz aufblitzt,
+// zaehlt bewusst nicht als robust - das waere Scheingenauigkeit.
+//
+// candidateParties: typischerweise die acceptableParties einer Nutzer:in
+// (ohne avoidPartyId/referenceParty selbst - werden hier zur Sicherheit
+// nochmal rausgefiltert).
+function findRobustSecondVoteAlternative(constituencies, avoidPartyId, referenceParty, candidateParties) {
+  const baseline = allocateParliament(constituencies);
+  const baselineAvoidSeats = baseline.seats[avoidPartyId] || 0;
+
+  const seatsForSwing = (party, swingPct) =>
+    simulateSecondVoteOnly(constituencies, party, swingPct).seats[avoidPartyId] || 0;
+
+  const referenceBySwing = ROBUSTNESS_SWINGS.map((pp) => seatsForSwing(referenceParty, pp));
+
+  const candidates = candidateParties.filter((p) => p !== avoidPartyId && p !== referenceParty);
+
+  const evaluated = candidates.map((party) => {
+    const bySwing = ROBUSTNESS_SWINGS.map((pp) => seatsForSwing(party, pp));
+    const neverWorse = bySwing.every((seats, i) => seats <= referenceBySwing[i]);
+    const sometimesBetter = bySwing.some((seats, i) => seats < referenceBySwing[i]);
+    return { party, bySwing, isRobust: neverWorse && sometimesBetter };
+  });
+
+  const robustAlternatives = evaluated
+    .filter((r) => r.isRobust)
+    // Sortiert nach Wirkung beim Standard-Swing (Index 2 = +3pp, derselbe
+    // Wert, den die App sonst ueberall als Referenzgroesse zeigt).
+    .sort((a, b) => a.bySwing[2] - b.bySwing[2]);
+
+  return {
+    baselineAvoidSeats,
+    referenceParty,
+    referenceBySwing,
+    swings: ROBUSTNESS_SWINGS,
+    evaluated,
+    hasRobustAlternative: robustAlternatives.length > 0,
+    bestRobustAlternative: robustAlternatives[0] || null,
+  };
 }
 
 // Hare-Niemeyer-Aequivalent zur alten Sainte-Laguë-"votesToNextSeat()":
@@ -419,6 +478,7 @@ if (typeof module !== "undefined" && module.exports) {
     recommendDirectMandateAgainst,
     simulateSecondVoteOnly,
     recommendSecondVoteAgainst,
+    findRobustSecondVoteAlternative,
     remainderGap,
   };
 }
